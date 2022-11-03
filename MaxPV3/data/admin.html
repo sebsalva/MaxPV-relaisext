@@ -113,7 +113,7 @@
                             <label class="form-check-label" for="mqtt_active">Activation MQTT</label>
                         </div>
                     </div>
-                </div>    
+                </div>
                 <div class="row mb-3">
                     <div class="col-6">
                         <label for="mqtt_ip" class="form-label">IP serveur MQTT</label>
@@ -133,7 +133,7 @@
                         <input type="number" class="form-control text-center" id="mqtt_period" placeholder="xxx"
                             required min="1" max="3600" step ="1">
                     </div>
-                </div>    
+                </div>
                 <br>
 
                 <h4>Configuration du mode boost</h4>
@@ -150,7 +150,32 @@
                             id="boost_ratio" placeholder="xxx" required min="10" max="100" step="10">
                     </div>
                 </div>
+                <h4>Configuration Relais Extérieur</h4>
+                <br>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="a_div2_ext">
+                            <label class="form-check-label" for="a_div2_ext">Activation Relais Extérieur</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label for="a_div2_urlon" class="form-label">URL Appel On</label>
+                        <input type="text" class="form-control text-center" id="a_div2_urlon" placeholder="http://"
+                            required
+                            pattern="^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$">
+                    </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label for="a_div2_urlon" class="form-label">URL Appel Off</label>
+                        <input type="text" class="form-control text-center" id="a_div2_urloff" placeholder="http://"
+                            required
+                            pattern="^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$">
+                    </div>
 
+                </div>
                 <div class="row mb-3">
                     <div class="col-12 d-grid gap-2">
                         <button type="submit" class="btn btn-warning" id="btnFormIPConfig">Enregistrer la
@@ -169,13 +194,13 @@
                 <a class="btn btn-success" role="button" type="submit"
                     href="DLconfig" onclick="this.blur();">
                     Exporter la configuration MaxPV!</a>
-                
+
                 <label for="formFileRestore" class="form-label"></label>
                 <input class="form-control" type="file" id="formFileRestore">
                 <button class="btn btn-danger" type="submit"
-                    onclick="restoreConfigMaxPV ( this ); saveConfigMaxPV ( this ); sendAction ( 'rebootesp', this ); 
+                    onclick="restoreConfigMaxPV ( this ); saveConfigMaxPV ( this ); sendAction ( 'rebootesp', this );
                     alert('Configuration restaurée.<br>Le système redémarre.', 'danger', 'liveAlertPlaceholderAdvancesAction');">
-                    Restaurer la configuration MaxPV!</button>            
+                    Restaurer la configuration MaxPV!</button>
             </div>
             <pre id="output"></pre>
             <br>
@@ -184,11 +209,11 @@
                 <span>Cliquer pour réaliser les actions avancées suivantes :</span>
                 </p>
                 <div class="d-grid gap-2">
-                    <button class="btn btn-warning" type="submit" onclick="sendAction ( 'rebootesp', this );         
+                    <button class="btn btn-warning" type="submit" onclick="sendAction ( 'rebootesp', this );
                         alert('Le système redémarre...', 'success', 'liveAlertPlaceholderAdvancesAction');">
                         Redémarrer le Webserver</button>
                     <button class="btn btn-danger" type="submit"
-                        onclick="sendAction ( 'eraseconfigesp', this  ); sendAction ( 'rebootesp', this ); 
+                        onclick="sendAction ( 'eraseconfigesp', this  ); sendAction ( 'rebootesp', this );
                         alert('Configurations Wifi et MaxPV! effacées.<br>Le système redémarre.<br>Se connecter au réseau temporaire de MaxPV avec l\'adresse 192.168.4.1', 'danger', 'liveAlertPlaceholderAdvancesAction');">
                         Oublier le réseau Wifi</button>
                 </div>
@@ -230,6 +255,11 @@
                     document.getElementById("mqtt_period").value = doc["mqtt_period"];
                     if (doc["mqtt_active"] == "1") mqtt_active.checked = true;
                     else mqtt_active.checked = false;
+                    //relais_ext
+                    if (doc["a_div2_ext"] == "1") a_div2_ext.checked = true;
+                    else a_div2_ext.checked = false;
+                    document.getElementById("a_div2_urlon").value = doc["a_div2_urlon"] ?? "";
+                    document.getElementById("a_div2_urloff").value = doc["a_div2_urloff"] ?? "";
                 }
             }
             xhttp1.open("GET", "api/get?configmaxpv", true); xhttp1.send();
@@ -253,6 +283,11 @@
             doc["mqtt_period"] = document.getElementById("mqtt_period").value;
             if(mqtt_active.checked == true) doc["mqtt_active"] = "1";
             else doc["mqtt_active"] = "0";
+	          //relais_ext
+	          doc["a_div2_urlon"] = document.getElementById("a_div2_urlon").value;
+	          doc["a_div2_urloff"] = document.getElementById("a_div2_urloff").value;
+            if(a_div2_ext.checked == true) doc["a_div2_ext"] = "1";
+            else doc["a_div2_ext"] = "0";
             var value_param = JSON.stringify(doc);
             args += value_param;
             xhttp.open("GET", args, true);
@@ -278,6 +313,11 @@
                 document.getElementById("mqtt_period").value = doc["mqtt_period"] ?? "";
                 if (doc["mqtt_active"] == "1") mqtt_active.checked = true;
                 else mqtt_active.checked = false;
+                //relais_ext
+                if (doc["a_div2_ext"] == "1") a_div2_ext.checked = true;
+                else a_div2_ext.checked = false;
+                document.getElementById("a_div2_urlon").value = doc["a_div2_urlon"] ?? "";
+                document.getElementById("a_div2_urloff").value = doc["a_div2_urloff"] ?? "";
     	    });
         }
 
