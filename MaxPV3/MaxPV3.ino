@@ -54,6 +54,8 @@
 #include <DNSServer.h>
 #include <NTPClient.h>
 #include <SimpleFTPServer.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
 
 // ***      ATTENTION : NE PAS ACTIVER LE DEBUG SERIAL SUR AUCUNE LIBRAIRIE        ***
 
@@ -73,7 +75,7 @@
 #define MAXPV_VERSION_FULL "MaxPV! 3.3"
 
 // Heure solaire
-#define GMT_OFFSET 0 
+#define GMT_OFFSET 0
 
 // SSID pour le Config Portal
 #define SSID_CP "MaxPV"
@@ -105,7 +107,7 @@
 // définition de l'ordre des paramètres de configuration de EcoPV tels que transmis
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
 // on utilise la position 0 pour stocker la version
-#define NB_PARAM 17 // Nombre de paramètres transmis par EcoPV (17 = 16 + VERSION)
+#define NB_PARAM 18 // Nombre de paramètres transmis par EcoPV (18 = 17 + VERSION)
 #define ECOPV_VERSION 0
 #define V_CALIB 1
 #define P_CALIB 2
@@ -121,8 +123,9 @@
 #define T_DIV2_ON 12
 #define T_DIV2_OFF 13
 #define T_DIV2_TC 14
-#define CNT_CALIB 15
-#define P_INSTALLPV 16
+#define A_DIV2_EXT 15
+#define CNT_CALIB 16
+#define P_INSTALLPV 17
 
 // définition de l'ordre des informations statistiques transmises par EcoPV
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
@@ -188,7 +191,7 @@ char static_sn[16] = "255.255.255.0";
 char static_dns1[16] = "192.168.1.1";
 char static_dns2[16] = "8.8.8.8";
 
-// Port HTTP                  
+// Port HTTP
 // Attention, le choix du port est inopérant dans cette version
 uint16_t httpPort = 80;
 
@@ -201,6 +204,12 @@ char mqttIP[16] = "192.168.1.100";  // IP du serveur MQTT
 uint16_t mqttPort = 1883;           // Port du serveur MQTT
 int mqttPeriod = 10;                // Période de transmission en secondes
 int mqttActive = OFF;               // MQTT actif (=ON) ou non (=OFF)
+
+//variables relais_ext
+short  a_div2_ext = 0;
+char a_div2_urloff[255] = "http://";
+char a_div2_urlon[255]  = "http://";
+short  etatrelais    = 0;
 
 // Fin des variables de la configuration MaxPV!
 
@@ -225,8 +234,8 @@ struct historicData
 };
 historicData energyIndexHistoric[HISTORY_RECORD];
 int historyCounter = 0; // position courante dans le tableau de l'historique
-                        // = position du plus ancien enregistrement
-                        // = position du prochain enregistrement à réaliser
+// = position du plus ancien enregistrement
+// = position du prochain enregistrement à réaliser
 
 // Variables pour la gestion du mode BOOST
 #define BURST_PERIOD 300    // Période des bursts SSR pour le mode BOOST en secondes
@@ -624,8 +633,17 @@ void setup()
       mqttPort = jsonConfig["mqtt_port"];
       mqttPeriod = jsonConfig["mqtt_period"];
       mqttActive = jsonConfig["mqtt_active"];
- 
+      //relais_ext
+      a_div2_ext = jsonConfig["a_div2_ext"];
+      strlcpy ( a_div2_urlon,
+                jsonConfig ["a_div2_urlon"],
+                255);
+      strlcpy ( a_div2_urloff,
+                jsonConfig ["a_div2_urloff"],
+                255);
       configWrite ( );
+      // envoi config relaisext à ecoPv
+      setParamEcoPV ( "a_div2_ext", String(a_div2_ext) );
     }
     else response = F("Bad request or request unknown");
     request->send ( 200, "text/plain", response );
@@ -866,7 +884,7 @@ void setup()
     // fin du traitement du mode BOOST
 
     // traitement MQTT
-    if ((mqttActive == ON) && (generalCounterSecond % mqttPeriod == 0) ){
+    if ((mqttActive == ON) && (generalCounterSecond % mqttPeriod == 0) ) {
       if (mqttClient.connected ()) {
         ecoPVStats[P_ACT].toCharArray(buf, 16);
         mqttClient.publish(MQTT_P_ACT, 0, true, buf);
@@ -879,7 +897,7 @@ void setup()
     }
     // fin de traitement MQTT
 
-    
+
   },
   nullptr, true);
 
@@ -946,7 +964,15 @@ bool configRead(void)
         mqttPort = jsonConfig["mqtt_port"] | 1883;
         mqttPeriod = jsonConfig["mqtt_period"] | 10;
         mqttActive = jsonConfig["mqtt_active"] | OFF;
-     }
+        //URL pour relais_ext
+        a_div2_ext = jsonConfig["a_div2_ext"] | 0;
+        strlcpy(a_div2_urlon,
+                jsonConfig["a_div2_urlon"] | "http://",
+                255);
+        strlcpy(a_div2_urloff,
+                jsonConfig["a_div2_urloff"] | "http://",
+                255);
+      }
       else
       {
         Serial.println(F("\n\nPas d'adresse IP dans le fichier de configuration !"));
@@ -981,6 +1007,10 @@ void configWrite(void)
   jsonConfig["mqtt_port"] = mqttPort;
   jsonConfig["mqtt_period"] = mqttPeriod;
   jsonConfig["mqtt_active"] = mqttActive;
+  //relais_ext
+  jsonConfig["a_div2_ext"] = a_div2_ext;
+  jsonConfig["a_div2_urlon"] = a_div2_urlon;
+  jsonConfig["a_div2_urloff"] = a_div2_urloff;
 
   File configFile = LittleFS.open(F("/config.json"), "w");
   serializeJson(jsonConfig, configFile);
@@ -1111,6 +1141,8 @@ bool serialProcess(void)
         if (i < (NB_STATS + NB_STATS_SUPP - 1))
           ecoPVStatsAll += F(",");
       }
+      //appel méthode gestion relais_ext
+      if (a_div2_ext == 1) relais_ext ( );
     }
 
     else if (incomingData.startsWith(F("PARAM")))
@@ -1133,7 +1165,6 @@ bool serialProcess(void)
         }
       }
     }
-
     else if (incomingData.startsWith(F("VERSION")))
     {
       incomingData.replace(F("VERSION,"), "");
@@ -1283,4 +1314,54 @@ void timeScheduler(void)
 
   // Mise à jour des index de début de journée en début de journée solaire à 00H00
   if ( ( hour == 0 ) && ( minute == 0 ) ) setRefIndexJour ( );
+}
+
+// gestion relais_ext
+void relais_ext (void)
+{
+  if ( ecoPVStats[STATUS_BYTE].toInt() & B00000100 )
+  {
+    //ecopv relais on
+    if (etatrelais == 0 )
+    {
+      //appel relais ext on
+      if (appel_http(String(a_div2_urlon)) != -1)
+        etatrelais = 1;
+    }
+  }
+  else
+  {
+    //ecopv relais off
+    if (etatrelais == 1 )
+    {
+      //appel relais ext off
+      if (appel_http(String(a_div2_urloff)) != -1)
+        etatrelais = 0;
+    }
+  }
+}
+//appel HTTP
+short appel_http (String url)
+{
+  WiFiClient client;
+  HTTPClient http;
+ tcpClient.println(F("Tentative appel HTTP code:"));
+  if (http.begin(client, url))
+  { // HTTP
+    int httpCode = http.GET();
+    tcpClient.print(httpCode);
+    if (httpCode != 200) {
+      
+      return -1;
+    }
+    else {
+      return 1;
+         }
+    http.end();
+  }
+  else 
+  {
+    tcpClient.print(-1);
+    return -1;
+  }
 }
