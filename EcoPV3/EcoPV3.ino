@@ -186,6 +186,7 @@ int   P_DIV2_IDLE   =     200;         // Puissance active importée en Watt qui
 byte  T_DIV2_ON     =       5;         // Durée minimale d'activation du délestage en minutes
 byte  T_DIV2_OFF    =       5;         // Durée minimale d'arrêt du délestage en minutes
 byte  T_DIV2_TC     =       1;         // Constante de temps de moyennage des puissance routées et active en minutes
+short A_DIV2_EXT    = 	    0;	       //module relais ext			
 // NOTE : Il faut une condition d'hystérésis pour un bon fonctionnement :
 // P_DIV2_ACTIVE + P_DIV2_IDLE > à la puissance de la charge de délestage secondaire
 
@@ -258,6 +259,7 @@ const paramInConfig pvrParamConfig [ ] = {
   { 4,        0,     240,   &T_DIV2_ON      },       // T_DIV2_ON
   { 4,        0,     240,   &T_DIV2_OFF     },       // T_DIV2_OFF
   { 4,        0,      60,   &T_DIV2_TC      },       // T_DIV2_TC
+  { 0,        0,       1,   &A_DIV2_EXT     },       // A_DIV2_EXT
   { 1,        0,    1000,   &CNT_CALIB      },       // CNT_CALIB
   { 0,      100,   30000,   &P_INSTALLPV    }        // P_INSTALLPV
 };
@@ -390,11 +392,12 @@ struct dataEeprom {                         // Structure des données pour le st
   byte                  t_div2_on;
   byte                  t_div2_off;
   byte                  t_div2_tc;
+  short			            a_div2_ext;
   // fin des données eeprom V1
   float                 cnt_calib;
   int                   p_installpv;
   // fin des données eeprom V2
-  // taille totale : 39 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes)
+  // taille totale : 39 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 1 bool ext
 };
 
 struct indexEeprom {
@@ -616,30 +619,36 @@ void loop ( ) {
     // *** Déclenchement et gestion du relais secondaire de délestage     ***
     if ( ( relayMode == AUTOM ) && ( triacMode == AUTOM ) ) {
       if ( ( Prouted_filtered >= float ( P_DIV2_ACTIVE ) ) && ( Div2_Off_cnt == 0 ) ) {
-        digitalWrite ( relayPin, ON );    // Activation du relais de délestage
+        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, ON );    // Activation du relais de délestage test si relais ext 
         Div2_On_cnt = 60 * T_DIV2_ON;     // Initialisation de la durée de fonctionnement minimale en sevondes
       }
       else if ( Div2_On_cnt > 0 ) {
         Div2_On_cnt --;                   // décrément d'une seconde
       }
       else if ( ( Pact_filtered >= float ( P_DIV2_IDLE ) ) && ( digitalRead ( relayPin ) == ON ) ) {
-        digitalWrite ( relayPin, OFF );   // Arrêt du délestage
+        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );   // Arrêt du délestage
         Div2_Off_cnt = 60 * T_DIV2_OFF;   // Initialisation de la durée d'arrêt minimale en secondes
       }
       else if ( Div2_Off_cnt > 0 ) {
         Div2_Off_cnt --;                  // décrément d'une seconde
       }
-      else digitalWrite ( relayPin, OFF );
+      else if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );
     }
     else {
       Div2_On_cnt = 0;
       Div2_Off_cnt = 0;
-      if ( relayMode != AUTOM ) digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
-      else digitalWrite ( relayPin, OFF );                            // Cas où le SSR est en mode forcé et le relais en mode AUTO :
+      if ( relayMode != AUTOM ) 
+	      {
+	        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
+	      }
+      else {
+	if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );
+                            // Cas où le SSR est en mode forcé et le relais en mode AUTO :
+	   }
     }                                                                 // le relais ne peut être activé (OFF)
 
     // *** Vérification de l'état du relais de délestage                  ***
-    if ( digitalRead ( relayPin ) == ON )
+    if ( A_DIV2_EXT == 0 && digitalRead ( relayPin ) == ON )
       stats_error_status |= B00000100;
     else
       stats_error_status &= B11111011;
@@ -1113,6 +1122,7 @@ bool eeConfigRead ( void ) {
     T_DIV2_ON     = pvrConfig.t_div2_on;
     T_DIV2_OFF    = pvrConfig.t_div2_off;
     T_DIV2_TC     = pvrConfig.t_div2_tc;
+    A_DIV2_EXT    = pvrConfig.a_div2_ext; // param relais ext
     CNT_CALIB     = pvrConfig.cnt_calib;
     P_INSTALLPV   = pvrConfig.p_installpv;
     return true;
@@ -1143,6 +1153,7 @@ void eeConfigWrite ( void ) {
   pvrConfig.t_div2_on       = T_DIV2_ON;
   pvrConfig.t_div2_off      = T_DIV2_OFF;
   pvrConfig.t_div2_tc       = T_DIV2_TC;
+  pvrConfig.a_div2_ext	    = A_DIV2_EXT;
   pvrConfig.cnt_calib       = CNT_CALIB;
   pvrConfig.p_installpv     = P_INSTALLPV;
   EEPROM.put ( PVR_EEPROM_START, pvrConfig );
