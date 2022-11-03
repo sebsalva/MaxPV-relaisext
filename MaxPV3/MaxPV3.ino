@@ -206,7 +206,7 @@ int mqttPeriod = 10;                // Période de transmission en secondes
 int mqttActive = OFF;               // MQTT actif (=ON) ou non (=OFF)
 
 //variables relais_ext
-short  a_div2_ext = 0;
+short  a_div2_ext = OFF;
 char a_div2_urloff[255] = "http://";
 char a_div2_urlon[255]  = "http://";
 short  etatrelais    = 0;
@@ -964,8 +964,8 @@ bool configRead(void)
         mqttPort = jsonConfig["mqtt_port"] | 1883;
         mqttPeriod = jsonConfig["mqtt_period"] | 10;
         mqttActive = jsonConfig["mqtt_active"] | OFF;
-        //URL pour relais_ext
-        a_div2_ext = jsonConfig["a_div2_ext"] | 0;
+        //pour relais_ext
+        a_div2_ext = jsonConfig["a_div2_ext"] | OFF;
         strlcpy(a_div2_urlon,
                 jsonConfig["a_div2_urlon"] | "http://",
                 255);
@@ -1142,7 +1142,7 @@ bool serialProcess(void)
           ecoPVStatsAll += F(",");
       }
       //appel méthode gestion relais_ext
-      if (a_div2_ext == 1) relais_ext ( );
+      if (a_div2_ext == ON) relais_ext ( );
     }
 
     else if (incomingData.startsWith(F("PARAM")))
@@ -1322,21 +1322,21 @@ void relais_ext (void)
   if ( ecoPVStats[STATUS_BYTE].toInt() & B00000100 )
   {
     //ecopv relais on
-    if (etatrelais == 0 )
+    if (etatrelais == OFF )
     {
       //appel relais ext on
       if (appel_http(String(a_div2_urlon)) != -1)
-        etatrelais = 1;
+        etatrelais = ON;
     }
   }
   else
   {
     //ecopv relais off
-    if (etatrelais == 1 )
+    if (etatrelais == ON )
     {
       //appel relais ext off
       if (appel_http(String(a_div2_urloff)) != -1)
-        etatrelais = 0;
+        etatrelais = OFF;
     }
   }
 }
@@ -1345,21 +1345,20 @@ short appel_http (String url)
 {
   WiFiClient client;
   HTTPClient http;
- tcpClient.println(F("Tentative appel HTTP code:"));
+  tcpClient.print(F("Tentative appel HTTP code:"));
   if (http.begin(client, url))
   { // HTTP
     int httpCode = http.GET();
     tcpClient.print(httpCode);
     if (httpCode != 200) {
-      
       return -1;
     }
     else {
       return 1;
-         }
+    }
     http.end();
   }
-  else 
+  else
   {
     tcpClient.print(-1);
     return -1;
