@@ -69,7 +69,7 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define VERSION            "3.3"      // Version logicielle
+#define VERSION            "3.32"      // Version logicielle
 #define SERIAL_BAUD      500000       // Vitesse de la liaison port série
 #define SERIALTIMEOUT       100       // Timeout pour les interrogations sur liaison série en ms
 
@@ -186,7 +186,7 @@ int   P_DIV2_IDLE   =     200;         // Puissance active importée en Watt qui
 byte  T_DIV2_ON     =       5;         // Durée minimale d'activation du délestage en minutes
 byte  T_DIV2_OFF    =       5;         // Durée minimale d'arrêt du délestage en minutes
 byte  T_DIV2_TC     =       1;         // Constante de temps de moyennage des puissance routées et active en minutes
-short A_DIV2_EXT    = 	    0;	       //module relais ext			
+byte   A_DIV2_EXT    = 	    0;	       //module relais ext
 // NOTE : Il faut une condition d'hystérésis pour un bon fonctionnement :
 // P_DIV2_ACTIVE + P_DIV2_IDLE > à la puissance de la charge de délestage secondaire
 
@@ -195,6 +195,10 @@ float CNT_CALIB     =       1.0;         // En Wh par impulsion externe
 
 // ************* Puissance de l'installation PV (valeurs par défaut)
 int   P_INSTALLPV   =     3000;          // Valeur en Wc de la puissance de l'installation PV | production max (valeur par défaut)
+
+// ************* Etats SSR et Relais (valeurs par défaut)
+byte   S_SSR         =     AUTOM;         // sauvegarde etat Automatique par défaut
+byte   S_Relay       =     AUTOM;         // sauvegarde etat Automatique par défaut
 
 // ***********************************************************************************************************************
 // energyToDelay [ ] = Tableau du retard de déclenchement du SSR/TRIAC en fonction du routage de puissance désiré.
@@ -233,7 +237,7 @@ byte energyToDelay [ ] = {
 // ***********************************************************************************
 // *********  Définition de la structure de la configuration du routeur     **********
 // ***********************************************************************************
-#define NB_PARAM            16          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2
+#define NB_PARAM            19          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
 
 struct paramInConfig {                  // Structure pour la manipulation des données de configuration
   byte dataType;                        // 0 : int, 1 : float, 4 : byte
@@ -259,11 +263,12 @@ const paramInConfig pvrParamConfig [ ] = {
   { 4,        0,     240,   &T_DIV2_ON      },       // T_DIV2_ON
   { 4,        0,     240,   &T_DIV2_OFF     },       // T_DIV2_OFF
   { 4,        0,      60,   &T_DIV2_TC      },       // T_DIV2_TC
-  { 0,        0,       1,   &A_DIV2_EXT     },       // A_DIV2_EXT
+  { 4,        0,       1,   &A_DIV2_EXT     },       // A_DIV2_EXT
   { 1,        0,    1000,   &CNT_CALIB      },       // CNT_CALIB
-  { 0,      100,   30000,   &P_INSTALLPV    }        // P_INSTALLPV
+  { 0,      100,   30000,   &P_INSTALLPV    },       // P_INSTALLPV
+  { 4,        0,      10,   &S_SSR          },       // S_SSR sauvegarde
+  { 4,        0,      10,   &S_Relay        }        // S_Relay sauvegarde
 };
-
 
 // ***********************************************************************************
 // ************* Variables globales pour le fonctionnement du régulateur   ***********
@@ -392,12 +397,14 @@ struct dataEeprom {                         // Structure des données pour le st
   byte                  t_div2_on;
   byte                  t_div2_off;
   byte                  t_div2_tc;
-  short			            a_div2_ext;
+  byte			a_div2_ext;
   // fin des données eeprom V1
   float                 cnt_calib;
   int                   p_installpv;
+  byte                   s_ssr;
+  byte                   s_relay;
   // fin des données eeprom V2
-  // taille totale : 39 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 1 bool ext
+  // taille totale : 42 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat
 };
 
 struct indexEeprom {
@@ -619,7 +626,7 @@ void loop ( ) {
     // *** Déclenchement et gestion du relais secondaire de délestage     ***
     if ( ( relayMode == AUTOM ) && ( triacMode == AUTOM ) ) {
       if ( ( Prouted_filtered >= float ( P_DIV2_ACTIVE ) ) && ( Div2_Off_cnt == 0 ) ) {
-        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, ON );    // Activation du relais de délestage test si relais ext 
+        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, ON );    // Activation du relais de délestage test si relais ext
         Div2_On_cnt = 60 * T_DIV2_ON;     // Initialisation de la durée de fonctionnement minimale en sevondes
       }
       else if ( Div2_On_cnt > 0 ) {
@@ -637,14 +644,14 @@ void loop ( ) {
     else {
       Div2_On_cnt = 0;
       Div2_Off_cnt = 0;
-      if ( relayMode != AUTOM ) 
-	      {
-	        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
-	      }
+      if ( relayMode != AUTOM )
+      {
+        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
+      }
       else {
-	if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );
-                            // Cas où le SSR est en mode forcé et le relais en mode AUTO :
-	   }
+        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );
+        // Cas où le SSR est en mode forcé et le relais en mode AUTO :
+      }
     }                                                                 // le relais ne peut être activé (OFF)
 
     // *** Vérification de l'état du relais de délestage                  ***
@@ -828,9 +835,9 @@ void startPVR ( void ) {
   // arrêt du relais secondaire de délestage  par sécurité
   digitalWrite ( relayPin, OFF );
   // Configuration du triac/SSR en automatique
-  triacMode = AUTOM;
+  triacMode = S_SSR ; //chargement etat
   // Configuration du relais de délestage secondaire en automatique
-  relayMode = AUTOM;
+  relayMode = S_Relay ; //chargement etat
 
   // Configuration du convertisseur ADC pour travailler sur interruptions
   configADC ( );
@@ -1037,11 +1044,17 @@ void serialRequest ( void ) {
       // Modification du mode relais secondaire de délestage
       incomingCommand.replace ( F("SETRELAY,"), "" );
       incomingCommand.replace ( F(",END"), "" );
-
       if ( incomingCommand == F("STOP") )       relayMode = STOP;
       else if ( incomingCommand == F("FORCE") ) relayMode = FORCE;
       else if ( incomingCommand == F("AUTO") )  relayMode = AUTOM;
       Serial.print ( F("DONE:SETRELAY,OK,") );
+      //sauvegarde etat
+      byte *tmp = (byte *) pvrParamConfig [18].adr;
+      noInterrupts ( );
+      *tmp = relayMode ;
+      eeConfigWrite ( );
+      interrupts ( );
+      Serial.print ( F("DONE:SAVECFG,OK,") );
     }
 
     else if ( incomingCommand.startsWith ( F("SETSSR") ) ) {
@@ -1053,6 +1066,13 @@ void serialRequest ( void ) {
       else if ( incomingCommand == F("FORCE") ) triacMode = FORCE;
       else if ( incomingCommand == F("AUTO") )  triacMode = AUTOM;
       Serial.print ( F("DONE:SETSSR,OK,") );
+      //sauvegarde etat
+      byte *tmp2 = (byte *) pvrParamConfig [17].adr;
+      noInterrupts ( );
+      *tmp2 =  triacMode ;
+      eeConfigWrite ( );
+      interrupts ( );
+      Serial.print ( F("DONE:SAVECFG,OK,") );
     }
 
     else Serial.print ( F("UNKNOWN COMMAND,") );
@@ -1125,6 +1145,8 @@ bool eeConfigRead ( void ) {
     A_DIV2_EXT    = pvrConfig.a_div2_ext; // param relais ext
     CNT_CALIB     = pvrConfig.cnt_calib;
     P_INSTALLPV   = pvrConfig.p_installpv;
+    S_SSR         = pvrConfig.s_ssr; //sauvegarde etat
+    S_Relay       = pvrConfig.s_relay; //sauvegarde etat
     return true;
   }
 }
@@ -1156,6 +1178,8 @@ void eeConfigWrite ( void ) {
   pvrConfig.a_div2_ext	    = A_DIV2_EXT;
   pvrConfig.cnt_calib       = CNT_CALIB;
   pvrConfig.p_installpv     = P_INSTALLPV;
+  pvrConfig.s_ssr           = S_SSR ; //sauvegarde etat
+  pvrConfig.s_relay         = S_Relay ; //sauvegarde etat
   EEPROM.put ( PVR_EEPROM_START, pvrConfig );
 }
 
@@ -1850,7 +1874,7 @@ void pulseExternalInterrupt ( void ) {
 
   if ( ( TCNT2 == 0 ) && ( TCCR2B == 0 ) ) TCCR2B = 0x07;        // si Timer2 est arrêté on lance le Timer2 pour la vérification de la validité du pulse
   else {                                                         // on stoppe la vérification en cours car de manière évidente le précédent pulse n'était pas valide
-                                                                 // et on redémarre la vérification pour la nouvelle détection
+    // et on redémarre la vérification pour la nouvelle détection
     TCCR2B = 0x00;              // arrêt du Timer
     TCNT2 = 0;                  // on remet le compteur à 0
     TCCR2B = 0x07;              // on redémarre le Timer
