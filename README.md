@@ -7,6 +7,7 @@ Les modifications apportées sont les suivantes :
 
 #MaxPV
 Voir les détails de MaxPv ici : https://github.com/Jetblack31/MaxPV
+
 MaxPV! est une nouvelle interface pour EcoPV, compatible avec les montages EcoPV basés sur l'Arduino Nano et sur le Wemos ESP8266 pour la liaison Wifi. MaxPV! apporte une interface Web de configuration et de visualisation du fonctionnement, ainsi qu'une nouvelle API.
 
 ![MaxPV! main page](images/mainpage.png)  
