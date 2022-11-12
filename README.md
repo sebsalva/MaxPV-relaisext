@@ -5,7 +5,7 @@ Les modifications apportées sont les suivantes :
 * Utilisation d'un Relais HTTP (appel du relais via HTTP pour ON et OFF) en place du relais physique (l'utilisation du relais physique est toujours possible)
 * Sauvegarde des états du relais et du SSR: si Le routeur redémarre, le relais et le SSR ne sont plus en mode automatique mais utiliserons le dernier mode sauvegardé avant extinction.
 
-#MaxPV
+# MaxPV
 Voir les détails de MaxPv ici : https://github.com/Jetblack31/MaxPV
 
 MaxPV! est une nouvelle interface pour EcoPV, compatible avec les montages EcoPV basés sur l'Arduino Nano et sur le Wemos ESP8266 pour la liaison Wifi. MaxPV! apporte une interface Web de configuration et de visualisation du fonctionnement, ainsi qu'une nouvelle API.
