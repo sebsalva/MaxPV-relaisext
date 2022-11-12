@@ -75,7 +75,7 @@
 #define MAXPV_VERSION_FULL "MaxPV! 3.32"
 
 // Heure solaire
-#define GMT_OFFSET 0
+#define GMT_OFFSET 0 
 
 // SSID pour le Config Portal
 #define SSID_CP "MaxPV"
@@ -164,6 +164,7 @@
 #define INDEX_IMPULSION_J 26
 
 // Définition des channels MQTT
+#define MQTT_STATE         "maxpv/state"
 #define MQTT_V_RMS         "maxpv/vrms"
 #define MQTT_I_RMS         "maxpv/irms"
 #define MQTT_P_ACT         "maxpv/pact"
@@ -176,8 +177,55 @@
 #define MQTT_INDEX_EXPORT       "maxpv/indexexport"
 #define MQTT_INDEX_IMPULSION    "maxpv/indeximpulsion"
 #define MQTT_TRIAC_MODE    "maxpv/triacmode"
+#define MQTT_SET_TRIAC_MODE    "maxpv/triacmode/set"
 #define MQTT_RELAY_MODE    "maxpv/relaymode"
+#define MQTT_SET_RELAY_MODE    "maxpv/relaymode/set"
+#define MQTT_BOOST_MODE      "maxpv/boost"
+#define MQTT_SET_BOOST_MODE  "maxpv/boost/set"
 #define MQTT_STATUS_BYTE   "maxpv/statusbyte"
+
+// ***********************************************************************************
+// ******************* Variables globales de configuration MaxPV! ********************
+// ***********************************************************************************
+
+// Configuration IP statique mode STA
+char static_ip[16] = "192.168.1.250";
+char static_gw[16] = "192.168.1.1";
+char static_sn[16] = "255.255.255.0";
+char static_dns1[16] = "192.168.1.1";
+char static_dns2[16] = "8.8.8.8";
+
+// Port HTTP                  
+// Attention, le choix du port est inopérant dans cette version
+uint16_t httpPort = 80;
+
+// Définition des paramètres du mode BOOST
+byte boostRatio = 100;        // En % de la puissance max
+int boostDuration = 120;      // En minutes
+int boostTimerHour = 4;       // Heure Timer Boost
+int boostTimerMinute = 0;     // Minute Timer Boost
+int boostTimerActive = OFF;   // BOOST timer actif (=ON) ou non (=OFF)
+
+// Configuration de MQTT
+char mqttIP[16] = "192.168.1.100";  // IP du serveur MQTT
+uint16_t mqttPort = 1883;           // Port du serveur MQTT
+int mqttPeriod = 10;                // Période de transmission en secondes
+char mqttUser[40] = "";             // Utilisateur du serveur MQTT
+                                    // Optionnel : si vide, pas d'authentification
+char mqttPass[40] = "";             // Mot de passe du serveur MQTT
+int mqttActive = OFF;               // MQTT actif (= ON) ou non (= OFF)
+
+
+// Variables relais_ext
+short  a_div2_ext = OFF;
+char a_div2_urloff[255] = "http://example.com";
+char a_div2_urlon[255]  = "http://example.com";
+short  etatrelais    = 0;
+
+// ***********************************************************************************
+// *************** Fin des variables globales de configuration MaxPV! ****************
+// ***********************************************************************************
+
 
 // ***********************************************************************************
 // ************************ Déclaration des variables globales ***********************
@@ -193,50 +241,10 @@ String ecoPVStatsAll;
 TickerScheduler ts(11);
 // Compteur général à la seconde
 unsigned long generalCounterSecond = 0;
-
-// Variables de configuration de MaxPV!
-// Configuration IP statique
-char static_ip[16] = "192.168.1.250";
-char static_gw[16] = "192.168.1.1";
-char static_sn[16] = "255.255.255.0";
-char static_dns1[16] = "192.168.1.1";
-char static_dns2[16] = "8.8.8.8";
-
-// Port HTTP
-// Attention, le choix du port est inopérant dans cette version
-uint16_t httpPort = 80;
-
-// Définition des paramètres du mode BOOST
-byte boostRatio = 100;        // En % de la puissance max
-int boostDuration = 120;      // En minutes
-int boostTimerHour = 4;       // Heure Timer Boost
-int boostTimerMinute = 0;     // Minute Timer Boost
-int boostTimerActive = OFF;   // BOOST timer actif (=ON) ou non (=OFF)
-
-
-// Variables de configuration de MQTT
-char mqttIP[16] = "192.168.1.100";  // IP du serveur MQTT
-uint16_t mqttPort = 1883;           // Port du serveur MQTT
-int mqttPeriod = 10;                // Période de transmission en secondes
-char mqttUser[40] = "";             // Utilisateur du serveur MQTT
-                                    // Optionnel : si vide, pas d'authentification
-char mqttPass[40] = "";             // Mot de passe du serveur MQTT
-int mqttActive = OFF;               // MQTT actif (=ON) ou non (=OFF)
-
-//variables relais_ext
-short  a_div2_ext = OFF;
-char a_div2_urloff[255] = "http://";
-char a_div2_urlon[255]  = "http://";
-short  etatrelais    = 0;
-
-// Fin des variables de la configuration MaxPV!
-
 // Flag indiquant la nécessité de sauvegarder la configuration de MaxPV!
 bool shouldSaveConfig = false;
-
 // Flag indiquant la nécessité de lire les paramètres de routage EcoPV
 bool shouldReadParams = false;
-
 // Variables pour surveiller que l'on garde le contact avec EcoPV dans l'Arduino Nano
 unsigned long refTimeContactEcoPV = millis();
 bool contactEcoPV = false;
@@ -262,7 +270,7 @@ int burstCnt = 0;           // Compteur de la PWM software pour la gestion du mo
 
 // buffer pour manipuler le fichier de configuration de MaxPV! (ajuster la taille en fonction des besoins)
 StaticJsonDocument<1024> jsonConfig;
-
+// Variables pour la manipulation des adresses IP
 IPAddress _ip, _gw, _sn, _dns1, _dns2, _ipmqtt;
 
 // ***********************************************************************************
@@ -281,6 +289,8 @@ FtpServer ftpSrv;
 // ***********************************************************************************
 // **********************  FIN DES DEFINITIONS ET DECLARATIONS  **********************
 // ***********************************************************************************
+
+
 
 // ***********************************************************************************
 // ***************************   FONCTIONS ET PROCEDURES   ***************************
@@ -425,7 +435,6 @@ void setup()
 
   tcpClient.println(F("\n***** Reprise de la transmission du debug *****\n"));
   tcpClient.println(F("Connexion au réseau wifi réussie !"));
-  tcpClient.println(F("\nConfiguration des services web..."));
 
   // ***********************************************************************
   // ********      DECLARATIONS DES HANDLERS DU SERVEUR WEB         ********
@@ -673,7 +682,6 @@ void setup()
     request->send ( 200, "text/plain", response );
   });
 
-
   // ***********************************************************************
   // ********             HANDLERS DES DATAS HISTORIQUES            ********
   // ***********************************************************************
@@ -714,12 +722,19 @@ void setup()
     }
   });
 
+  // ***********************************************************************
+  // ********             HANDLERS DES EVENEMENTS MQTT              ********
+  // ***********************************************************************
+  
+  mqttClient.onConnect(onMqttConnect); // Appel de la fonction lors d'une connection MQTT établie
+  mqttClient.onMessage(onMqttMessage); // Appel de la fonction lors de la réception d'un message MQTT
 
   // ***********************************************************************
   // ********                   FIN DES HANDLERS                    ********
   // ***********************************************************************
 
-  // Démarrage du service update OTA et des services réseaux
+  // Démarrage des service réseau
+  tcpClient.println(F("\nConfiguration des services web..."));
   AsyncElegantOTA.setID(MAXPV_VERSION_FULL);
   AsyncElegantOTA.begin(&webServer);
   webServer.begin();
@@ -733,13 +748,13 @@ void setup()
        mqttClient.setCredentials(mqttUser,mqttPass);
     }
     mqttClient.setServer(_ipmqtt, mqttPort);
+    mqttClient.setWill(MQTT_STATE, 0, true, "disconnected");
     mqttClient.connect();
     tcpClient.println(F("Services MQTT configuré et démarré !"));
   }
 
   // Démarrage du service FTP
   ftpSrv.begin(LOGIN_FTP, PWD_FTP);
-
   tcpClient.println(F("Service FTP configuré et démarré !"));
   tcpClient.println(F("Port FTP : 21"));
   tcpClient.print(F("Login FTP : "));
@@ -748,18 +763,13 @@ void setup()
   tcpClient.println(PWD_FTP);
 
   tcpClient.println(F("\nDémarrage de la connexion à l'Arduino..."));
-
   Serial.setRxBufferSize(SERIAL_BUFFER);
   Serial.begin(SERIAL_BAUD);
   Serial.setTimeout(SERIALTIMEOUT);
   clearSerialInputCache();
-
   tcpClient.println(F("Liaison série configurée pour la communication avec l'Arduino, en attente d'un contact..."));
 
-  while (!serialProcess())
-  {
-    tcpClient.print(F("."));
-  }
+  while (!serialProcess()) { tcpClient.print(F(".")); }
   tcpClient.println(F("\nContact établi !\n"));
   contactEcoPV = true;
 
@@ -772,18 +782,15 @@ void setup()
   getVersionEcoPV();
   delay(100);
   serialProcess();
-
   // Récupération des informations de fonctionnement
   // En moins d'une seconde EcoPV devrait envoyer les informations
   while (!serialProcess()) { }
-
   tcpClient.println(F("\nDonnées récupérées de l'Arduino !\n"));
 
   // Peuplement des références des index journaliers
   setRefIndexJour();
   // Initialisation de l'historique
   initHistoric();
-
   tcpClient.println(F("Historiques initialisés.\n\n"));
 
   tcpClient.println(MAXPV_VERSION_FULL);
@@ -795,6 +802,7 @@ void setup()
     tcpClient.println(F("\n***** Version ECOPV et version MaxPV! différentes !!! *****"));
   };
   tcpClient.println(F("\n*** Fin du Setup ***\n"));
+
 
   // ***********************************************************************
   // ********      DEFINITION DES TACHES RECURRENTES DE TICKER      ********
@@ -894,7 +902,7 @@ void setup()
   {
     generalCounterSecond++;
 
-    // mode BOOST
+    // traitement du mode BOOST
     if (boostTime > 0) {
       if ( burstCnt <= ( ( BURST_PERIOD * int ( boostRatio ) ) / 100 ) ) SSRModeEcoPV(FORCE);
       else SSRModeEcoPV(STOP);
@@ -917,10 +925,10 @@ void setup()
     
   },
   nullptr, true);
-
-
   delay(1000);
 }
+
+
 
 ///////////////////////////////////////////////////////////////////
 // loop                                                          //
@@ -933,11 +941,12 @@ void loop()
   ts.update();
 }
 
+
+
 ///////////////////////////////////////////////////////////////////
 // Fonctions                                                     //
 // et Procédures                                                 //
 ///////////////////////////////////////////////////////////////////
-
 bool configRead(void)
 {
   // Note ici on utilise un debug sur liaison série car la fonction n'est appelé qu'au début du SETUP
@@ -1173,7 +1182,7 @@ bool serialProcess(void)
           ecoPVStatsAll += F(",");
       }
       //appel methode gestion relais_ext
-      if (a_div2_ext == ON) relais_ext ( );
+      if (a_div2_ext == ON) relais_http ( );
     }
 
     else if (incomingData.startsWith(F("PARAM")))
@@ -1196,6 +1205,7 @@ bool serialProcess(void)
         }
       }
     }
+
     else if (incomingData.startsWith(F("VERSION")))
     {
       incomingData.replace(F("VERSION,"), "");
@@ -1274,6 +1284,8 @@ void restartEcoPV(void)
 
 void relayModeEcoPV(byte opMode)
 {
+  char buff[2];
+  String str;
   String command = F("SETRELAY,");
   if (opMode == STOP)
     command += F("STOP");
@@ -1283,10 +1295,18 @@ void relayModeEcoPV(byte opMode)
     command += F("AUTO");
   command += F(",END#");
   Serial.print(command);
+
+  // Envoi du status via MQTT
+  str = String(opMode);
+  str.toCharArray(buff,2);
+  if (mqttClient.connected ()) mqttClient.publish(MQTT_RELAY_MODE, 0, true, buff);
+
 }
 
 void SSRModeEcoPV(byte opMode)
 {
+  char buff[2];
+  String str;
   String command = F("SETSSR,");
   if (opMode == STOP)
     command += F("STOP");
@@ -1296,6 +1316,10 @@ void SSRModeEcoPV(byte opMode)
     command += F("AUTO");
   command += F(",END#");
   Serial.print(command);
+  // Envoi du status via MQTT
+  str = String(opMode);
+  str.toCharArray(buff,2);
+  if (mqttClient.connected ()) mqttClient.publish(MQTT_TRIAC_MODE, 0, true, buff);
 }
 
 void watchDogContactEcoPV(void)
@@ -1341,12 +1365,14 @@ void boostON(void)
   if ( boostRatio != 0 ) {
     boostTime = ( 60 * boostDuration );   // conversion en secondes
     burstCnt = 0;
+    if (mqttClient.connected ()) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "on");
   }
 }
 
 void boostOFF(void)
 {
   boostTime = 0;
+  if (mqttClient.connected ()) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off");
 }
 
 void mqttTransmit(void)
@@ -1381,10 +1407,11 @@ void mqttTransmit(void)
     mqttClient.publish(MQTT_RELAY_MODE, 0, true, buf);
     ecoPVStats[STATUS_BYTE].toCharArray(buf, 16);
     mqttClient.publish(MQTT_STATUS_BYTE, 0, true, buf);
+    if (boostTime == -1) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off");
+    else mqttClient.publish(MQTT_BOOST_MODE, 0, true, "on");
   }
   else mqttClient.connect();        // Sinon on ne transmet pas mais on tente la reconnexion
 }
-
 
 void timeScheduler(void)
 {
@@ -1402,8 +1429,277 @@ void timeScheduler(void)
   };
 }
 
-// gestion relais_ext
-void relais_ext (void)
+void onMqttConnect(bool sessionPresent) 
+{
+  // Souscriptions aux topics pour gérer les états relais, SSR et boost
+  mqttClient.subscribe(MQTT_SET_RELAY_MODE,0);
+  mqttClient.subscribe(MQTT_SET_TRIAC_MODE,0);
+  mqttClient.subscribe(MQTT_SET_BOOST_MODE,0);
+
+  // Publication du status
+  mqttClient.publish(MQTT_STATE, 0, true, "connected");
+
+  // On crée les informations pour le Discovery HomeAssistant
+  // On crée un identifiant unique
+  String deviceID = "maxpv";
+  deviceID += ESP.getChipId();
+
+  // On récupère l'URL d'accès
+  String ip_url = "http://" + WiFi.localIP().toString();
+
+  // On crée les templates du topic et du Payload
+  String configTopicTemplate = String(F("homeassistant/#COMPONENT#/#DEVICEID#/#DEVICEID##SENSORID#/config"));
+  configTopicTemplate.replace(F("#DEVICEID#"), deviceID);
+
+  // Capteurs
+  String configPayloadTemplate = String(F(
+    "{"
+    "\"dev\":{"
+    "\"ids\":\"#DEVICEID#\","
+    "\"name\":\"MaxPV\","
+    "\"mdl\":\"MaxPV!\","
+    "\"mf\":\"JetBlack\","
+    "\"sw\":\"#VERSION#\","
+    "\"cu\":\"#IP#\""
+    "},"
+    "\"avty_t\":\"maxpv/state\","
+    "\"pl_avail\":\"connected\","
+    "\"pl_not_avail\":\"disconnected\","
+    "\"uniq_id\":\"#DEVICEID##SENSORID#\","
+    "\"dev_cla\":\"#CLASS#\","
+    "\"name\":\"#SENSORNAME#\","
+    "\"stat_t\":\"#STATETOPIC#\","
+    "\"unit_of_meas\":\"#UNIT#\""
+    "}"));
+  configPayloadTemplate.replace(" ", "");
+  configPayloadTemplate.replace(F("#DEVICEID#"), deviceID);
+  configPayloadTemplate.replace(F("#VERSION#"), MAXPV_VERSION);
+  configPayloadTemplate.replace(F("#IP#"), ip_url);
+
+  String topic;
+  String payload;
+
+  // On publie la config pour chaque sensor
+  // V_RMS
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("Tension"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Tension"));
+  payload.replace(F("#SENSORNAME#"), F("Tension"));
+  payload.replace(F("#CLASS#"), F("voltage"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_V_RMS));
+  payload.replace(F("#UNIT#"), "V");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // I_RMS
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("Courant"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Courant"));
+  payload.replace(F("#SENSORNAME#"), F("Courant"));
+  payload.replace(F("#CLASS#"), F("current"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_V_RMS));
+  payload.replace(F("#UNIT#"), "A");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // P_APP
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("PuissanceApparente"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("PuissanceApparente"));
+  payload.replace(F("#SENSORNAME#"), F("Puissance apparente"));
+  payload.replace(F("#CLASS#"), F("apparent_power"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_P_APP));
+  payload.replace(F("#UNIT#"), "VA");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_COS_PHI
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("FacteurPuissance"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("FacteurPuissance"));
+  payload.replace(F("#SENSORNAME#"), F("Facteur de puissance"));
+  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_COS_PHI));
+  payload.replace(F("#UNIT#"), "");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_P_ACT
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("PuissanceActive"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("PuissanceActive"));
+  payload.replace(F("#SENSORNAME#"), F("Puissance active"));
+  payload.replace(F("#CLASS#"), F("power"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
+  payload.replace(F("#UNIT#"), "W");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_P_ROUTED
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("PuissanceRoutee"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("PuissanceRoutee"));
+  payload.replace(F("#SENSORNAME#"), F("Puissance routée"));
+  payload.replace(F("#CLASS#"), F("power"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ROUTED));
+  payload.replace(F("#UNIT#"), "W");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  
+  // MQTT_P_IMPULSION
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("PuissanceProduite"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("PuissanceProduite"));
+  payload.replace(F("#SENSORNAME#"), F("Puissance produite"));
+  payload.replace(F("#CLASS#"), F("power"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_P_IMPULSION));
+  payload.replace(F("#UNIT#"), "W");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_INDEX_ROUTED
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("EnergieRoutee"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("EnergieRoutee"));
+  payload.replace(F("#SENSORNAME#"), F("Energie routée"));
+  payload.replace(F("#CLASS#"), F("energy"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_ROUTED));
+  payload.replace(F("#UNIT#"), "KWh");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_INDEX_IMPORT
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("EnergieImportee"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("EnergieImportee"));
+  payload.replace(F("#SENSORNAME#"), F("Energie importée"));
+  payload.replace(F("#CLASS#"), F("energy"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPORT));
+  payload.replace(F("#UNIT#"), "KWh");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  
+  // MQTT_INDEX_EXPORT
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("EnergieExportee"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("EnergieExportee"));
+  payload.replace(F("#SENSORNAME#"), F("Energie exportée"));
+  payload.replace(F("#CLASS#"), F("energy"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_EXPORT));
+  payload.replace(F("#UNIT#"), "KWh");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  
+  // MQTT_INDEX_IMPULSION
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("EnergieProduite"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("EnergieProduite"));
+  payload.replace(F("#SENSORNAME#"), F("Energie produite"));
+  payload.replace(F("#CLASS#"), F("energy"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPULSION));
+  payload.replace(F("#UNIT#"), "KWh");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_TRIAC_MODE
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("select"));
+  topic.replace(F("#SENSORID#"), F("SSR"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("SSR"));
+  payload.replace(F("#SENSORNAME#"), F("SSR"));
+  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_TRIAC_MODE));
+  payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
+                  F("\"val_tpl\":\"{% if value == '0' %}stop{% elif value == '1' %}force{% else %}auto{% endif %}\","
+                    "\"cmd_t\":\"#CMDTOPIC#\","
+                    "\"options\":[\"force\",\"auto\",\"stop\"]"));
+  payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_TRIAC_MODE));
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_RELAY_MODE
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("select"));
+  topic.replace(F("#SENSORID#"), F("Relais"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Relais"));
+  payload.replace(F("#SENSORNAME#"), F("Relais"));
+  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_RELAY_MODE));
+  payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
+                  F("\"val_tpl\":\"{% if value == '0' %}stop{% elif value == '1' %}force{% else %}auto{% endif %}\","
+                    "\"cmd_t\":\"#CMDTOPIC#\","
+                    "\"options\":[\"force\",\"auto\",\"stop\"]"));
+  payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_RELAY_MODE));
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_BOOST_MODE
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("switch"));
+  topic.replace(F("#SENSORID#"), F("Boost"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Boost"));
+  payload.replace(F("#SENSORNAME#"), F("Boost"));
+  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_BOOST_MODE));
+  payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
+                  F("\"cmd_t\":\"#CMDTOPIC#\","
+                    "\"payload_on\":\"on\","
+                    "\"payload_off\":\"off\""));
+  payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_BOOST_MODE));
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+}
+
+void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessageProperties& properties, 
+                   const size_t& len, const size_t& index, const size_t& total)
+{
+  // A la réception d'un message sur un des topics en écoute
+  // on vérifie le topic concerné et la commande reçue
+  if (String(topic).startsWith(F(MQTT_SET_RELAY_MODE))) {
+    if ( String(payload).startsWith(F("stop")) ) relayModeEcoPV ( STOP );
+    else if ( String(payload).startsWith(F("force")) ) relayModeEcoPV ( FORCE );
+    else if ( String(payload).startsWith(F("auto")) ) relayModeEcoPV ( AUTOM );
+  }
+  else if (String(topic).startsWith(F(MQTT_SET_TRIAC_MODE))) {
+    if ( String(payload).startsWith(F("stop")) ) SSRModeEcoPV ( STOP );
+    else if ( String(payload).startsWith(F("force")) ) SSRModeEcoPV ( FORCE );
+    else if ( String(payload).startsWith(F("auto")) ) SSRModeEcoPV ( AUTOM );
+  }
+  else if (String(topic).startsWith(F(MQTT_SET_BOOST_MODE))) {
+    if ( String(payload).startsWith(F("on")) ) boostON ( );
+    else if ( String(payload).startsWith(F("off")) ) boostOFF ( );
+  }
+}
+
+
+// gestion relais_http
+void relais_http (void)
 {
   if ( ecoPVStats[STATUS_BYTE].toInt() & B00000100 )
   {
