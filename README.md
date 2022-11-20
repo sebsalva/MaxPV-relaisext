@@ -4,6 +4,7 @@ Les modifications apportées sont les suivantes :
 
 * Utilisation d'un Relais HTTP (appel du relais via HTTP pour ON et OFF) en place du relais physique (l'utilisation du relais physique est toujours possible)
 * Sauvegarde des états du relais et du SSR: si Le routeur redémarre, le relais et le SSR ne sont plus en mode automatique mais utiliserons le dernier mode sauvegardé avant extinction.
+* Modification de la gestion MQTT auto-discovery pour fonctionnere avec le plugin MQTT auto-discovery de domoticz
 
 # MaxPV
 Voir les détails de MaxPv ici : https://github.com/Jetblack31/MaxPV
