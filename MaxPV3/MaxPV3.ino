@@ -1306,6 +1306,7 @@ void relayModeEcoPV(byte opMode)
 void SSRModeEcoPV(byte opMode)
 {
   char buff[2];
+  char tmp[5];
   String str;
   String command = F("SETSSR,");
   if (opMode == STOP)
@@ -1319,7 +1320,9 @@ void SSRModeEcoPV(byte opMode)
   // Envoi du status via MQTT
   str = String(opMode);
   str.toCharArray(buff,2);
-  if (mqttClient.connected ()) mqttClient.publish(MQTT_TRIAC_MODE, 0, true, buff);
+  if (buff[0]=='0') strcpy(tmp,"stop");
+    else if (buff[0]=='1') strcpy(tmp,"force"); else strcpy(tmp,"auto");   
+  if (mqttClient.connected ()) mqttClient.publish(MQTT_TRIAC_MODE, 0, true, tmp);
 }
 
 void watchDogContactEcoPV(void)
@@ -1378,6 +1381,7 @@ void boostOFF(void)
 void mqttTransmit(void)
 {
   char buf[16];
+  char tmp[5];
   if (mqttClient.connected ()) {          // On vérifie si on est connecté
     ecoPVStats[V_RMS].toCharArray(buf, 16);
     mqttClient.publish(MQTT_V_RMS, 0, true, buf);
@@ -1401,10 +1405,14 @@ void mqttTransmit(void)
     mqttClient.publish(MQTT_INDEX_EXPORT, 0, true, buf);
     ecoPVStats[INDEX_IMPULSION].toCharArray(buf, 16);
     mqttClient.publish(MQTT_INDEX_IMPULSION, 0, true, buf);
-    ecoPVStats[TRIAC_MODE].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_TRIAC_MODE, 0, true, buf);
+    ecoPVStats[TRIAC_MODE].toCharArray(buf, 16); 
+    if (buf[0]=='0') strcpy(tmp,"stop");
+    else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp,"auto"); 	
+    mqttClient.publish(MQTT_TRIAC_MODE, 0, true, tmp);
     ecoPVStats[RELAY_MODE].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_RELAY_MODE, 0, true, buf);
+    if (buf[0]=='0') strcpy(tmp,"stop");
+    else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp,"auto"); 
+    mqttClient.publish(MQTT_RELAY_MODE, 0, true, tmp);
     ecoPVStats[STATUS_BYTE].toCharArray(buf, 16);
     mqttClient.publish(MQTT_STATUS_BYTE, 0, true, buf);
     if (boostTime == -1) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off");
@@ -1502,7 +1510,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#SENSORID#"), F("Courant"));
   payload.replace(F("#SENSORNAME#"), F("Courant"));
   payload.replace(F("#CLASS#"), F("current"));
-  payload.replace(F("#STATETOPIC#"), F(MQTT_V_RMS));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_I_RMS));
   payload.replace(F("#UNIT#"), "A");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
@@ -1535,11 +1543,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_P_ACT
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("PuissanceActive"));
+  topic.replace(F("#SENSORID#"), F("Import_P"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("PuissanceActive"));
-  payload.replace(F("#SENSORNAME#"), F("Puissance active"));
+  payload.replace(F("#SENSORID#"), F("Import_P"));
+  payload.replace(F("#SENSORNAME#"), F("Import_P"));
   payload.replace(F("#CLASS#"), F("power"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
   payload.replace(F("#UNIT#"), "W");
@@ -1548,11 +1556,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_P_ROUTED
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("PuissanceRoutee"));
+  topic.replace(F("#SENSORID#"), F("Routage_P"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("PuissanceRoutee"));
-  payload.replace(F("#SENSORNAME#"), F("Puissance routée"));
+  payload.replace(F("#SENSORID#"), F("Routage_P"));
+  payload.replace(F("#SENSORNAME#"), F("Routage_P"));
   payload.replace(F("#CLASS#"), F("power"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_ROUTED));
   payload.replace(F("#UNIT#"), "W");
@@ -1561,11 +1569,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_P_IMPULSION
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("PuissanceProduite"));
+  topic.replace(F("#SENSORID#"), F("Production_P"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("PuissanceProduite"));
-  payload.replace(F("#SENSORNAME#"), F("Puissance produite"));
+  payload.replace(F("#SENSORID#"), F("Production_P"));
+  payload.replace(F("#SENSORNAME#"), F("Production_P"));
   payload.replace(F("#CLASS#"), F("power"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_IMPULSION));
   payload.replace(F("#UNIT#"), "W");
@@ -1574,11 +1582,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_INDEX_ROUTED
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("EnergieRoutee"));
+  topic.replace(F("#SENSORID#"), F("Routage_E"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("EnergieRoutee"));
-  payload.replace(F("#SENSORNAME#"), F("Energie routée"));
+  payload.replace(F("#SENSORID#"), F("Routage_E"));
+  payload.replace(F("#SENSORNAME#"), F("Routage_E"));
   payload.replace(F("#CLASS#"), F("energy"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_ROUTED));
   payload.replace(F("#UNIT#"), "KWh");
@@ -1587,11 +1595,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_INDEX_IMPORT
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("EnergieImportee"));
+  topic.replace(F("#SENSORID#"), F("Import_E"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("EnergieImportee"));
-  payload.replace(F("#SENSORNAME#"), F("Energie importée"));
+  payload.replace(F("#SENSORID#"), F("Import_E"));
+  payload.replace(F("#SENSORNAME#"), F("Import_E"));
   payload.replace(F("#CLASS#"), F("energy"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPORT));
   payload.replace(F("#UNIT#"), "KWh");
@@ -1600,11 +1608,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_INDEX_EXPORT
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("EnergieExportee"));
+  topic.replace(F("#SENSORID#"), F("Export_E"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("EnergieExportee"));
-  payload.replace(F("#SENSORNAME#"), F("Energie exportée"));
+  payload.replace(F("#SENSORID#"), F("Export_E"));
+  payload.replace(F("#SENSORNAME#"), F("Export_E"));
   payload.replace(F("#CLASS#"), F("energy"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_EXPORT));
   payload.replace(F("#UNIT#"), "KWh");
@@ -1613,11 +1621,11 @@ void onMqttConnect(bool sessionPresent)
   // MQTT_INDEX_IMPULSION
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
-  topic.replace(F("#SENSORID#"), F("EnergieProduite"));
+  topic.replace(F("#SENSORID#"), F("Production_E"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("EnergieProduite"));
-  payload.replace(F("#SENSORNAME#"), F("Energie produite"));
+  payload.replace(F("#SENSORID#"), F("Production_E"));
+  payload.replace(F("#SENSORNAME#"), F("Production_E"));
   payload.replace(F("#CLASS#"), F("energy"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPULSION));
   payload.replace(F("#UNIT#"), "KWh");
@@ -1634,9 +1642,8 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
   payload.replace(F("#STATETOPIC#"), F(MQTT_TRIAC_MODE));
   payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
-                  F("\"val_tpl\":\"{% if value == '0' %}stop{% elif value == '1' %}force{% else %}auto{% endif %}\","
-                    "\"cmd_t\":\"#CMDTOPIC#\","
-                    "\"options\":[\"force\",\"auto\",\"stop\"]"));
+                  F("\"cmd_t\":\"#CMDTOPIC#\","
+                    "\"options\":[\"stop\",\"force\",\"auto\"]"));
   payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_TRIAC_MODE));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
@@ -1651,9 +1658,8 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
   payload.replace(F("#STATETOPIC#"), F(MQTT_RELAY_MODE));
   payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
-                  F("\"val_tpl\":\"{% if value == '0' %}stop{% elif value == '1' %}force{% else %}auto{% endif %}\","
-                    "\"cmd_t\":\"#CMDTOPIC#\","
-                    "\"options\":[\"force\",\"auto\",\"stop\"]"));
+                  F("\"cmd_t\":\"#CMDTOPIC#\","
+                    "\"options\":[\"stop\",\"force\",\"auto\"]"));
   payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_RELAY_MODE));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
