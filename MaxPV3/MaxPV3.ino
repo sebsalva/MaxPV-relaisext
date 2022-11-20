@@ -170,6 +170,7 @@
 #define MQTT_P_ACT         "maxpv/pact"
 #define MQTT_P_APP         "maxpv/papp"
 #define MQTT_P_ROUTED      "maxpv/prouted"
+#define MQTT_P_EXPORT      "maxpv/pexport"
 #define MQTT_P_IMPULSION   "maxpv/pimpulsion"
 #define MQTT_COS_PHI       "maxpv/cosphi"
 #define MQTT_INDEX_ROUTED       "maxpv/indexrouted"
@@ -1382,6 +1383,7 @@ void mqttTransmit(void)
 {
   char buf[16];
   char tmp[5];
+  int power=0;
   if (mqttClient.connected ()) {          // On vérifie si on est connecté
     ecoPVStats[V_RMS].toCharArray(buf, 16);
     mqttClient.publish(MQTT_V_RMS, 0, true, buf);
@@ -1393,6 +1395,10 @@ void mqttTransmit(void)
     mqttClient.publish(MQTT_COS_PHI, 0, true, buf);
     ecoPVStats[P_ACT].toCharArray(buf, 16);
     mqttClient.publish(MQTT_P_ACT, 0, true, buf);
+    power=ecoPVStats[P_ACT].toInt();
+    if (power < 0)  sprintf(tmp, "%d", -power);
+    else  strcpy(tmp,"auto");
+    mqttClient.publish(MQTT_P_EXPORT, 0, true, tmp);
     ecoPVStats[P_ROUTED].toCharArray(buf, 16);
     mqttClient.publish(MQTT_P_ROUTED, 0, true, buf);
     ecoPVStats[P_IMPULSION].toCharArray(buf, 16);
@@ -1550,6 +1556,19 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#SENSORNAME#"), F("Import_P"));
   payload.replace(F("#CLASS#"), F("power"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
+  payload.replace(F("#UNIT#"), "W");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+ // MQTT_P_EXPORT
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("Export_P"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Export_P"));
+  payload.replace(F("#SENSORNAME#"), F("Export_P"));
+  payload.replace(F("#CLASS#"), F("power"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_P_EXPORT));
   payload.replace(F("#UNIT#"), "W");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
