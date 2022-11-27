@@ -69,7 +69,7 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define VERSION            "3.32"      // Version logicielle
+#define VERSION            "3.321"      // Version logicielle
 #define SERIAL_BAUD      500000       // Vitesse de la liaison port série
 #define SERIALTIMEOUT       100       // Timeout pour les interrogations sur liaison série en ms
 
@@ -115,6 +115,7 @@
 #define ledPinStatus           6    // OUT DIGITAL = PIN D6, LED de signalisation fonctionnement / erreur
 #define ledPinRouting          7    // OUT DIGITAL = PIN D7, LED de signalisation routage de puissance
 #define relayPin               8    // OUT DIGITAL = PIN D8, commande On/Off du relais de délestage secondaire
+
 
 //                   **************************************************
 //                   **********   A  T  T  E  N  T  I  O  N   *********
@@ -186,7 +187,7 @@ int   P_DIV2_IDLE   =     200;         // Puissance active importée en Watt qui
 byte  T_DIV2_ON     =       5;         // Durée minimale d'activation du délestage en minutes
 byte  T_DIV2_OFF    =       5;         // Durée minimale d'arrêt du délestage en minutes
 byte  T_DIV2_TC     =       1;         // Constante de temps de moyennage des puissance routées et active en minutes
-byte   A_DIV2_EXT    = 	    0;	       //module relais ext
+byte   A_DIV2_EXT   = 	    0;	       //module relais ext
 // NOTE : Il faut une condition d'hystérésis pour un bon fonctionnement :
 // P_DIV2_ACTIVE + P_DIV2_IDLE > à la puissance de la charge de délestage secondaire
 
@@ -199,6 +200,9 @@ int   P_INSTALLPV   =     3000;          // Valeur en Wc de la puissance de l'in
 // ************* Etats SSR et Relais (valeurs par défaut)
 byte   S_SSR         =     AUTOM;         // sauvegarde etat Automatique par défaut
 byte   S_Relay       =     AUTOM;         // sauvegarde etat Automatique par défaut
+
+int    T_CALIB     =       0;           // Calibration Température
+
 
 // ***********************************************************************************************************************
 // energyToDelay [ ] = Tableau du retard de déclenchement du SSR/TRIAC en fonction du routage de puissance désiré.
@@ -237,7 +241,7 @@ byte energyToDelay [ ] = {
 // ***********************************************************************************
 // *********  Définition de la structure de la configuration du routeur     **********
 // ***********************************************************************************
-#define NB_PARAM            19          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
+#define NB_PARAM           20          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
 
 struct paramInConfig {                  // Structure pour la manipulation des données de configuration
   byte dataType;                        // 0 : int, 1 : float, 4 : byte
@@ -267,7 +271,8 @@ const paramInConfig pvrParamConfig [ ] = {
   { 1,        0,    1000,   &CNT_CALIB      },       // CNT_CALIB
   { 0,      100,   30000,   &P_INSTALLPV    },       // P_INSTALLPV
   { 4,        0,      10,   &S_SSR          },       // S_SSR sauvegarde
-  { 4,        0,      10,   &S_Relay        }        // S_Relay sauvegarde
+  { 4,        0,      10,   &S_Relay        },        // S_Relay sauvegarde
+  { 0,        -20,      20, &T_CALIB        }        // T_CALIB
 };
 
 // ***********************************************************************************
@@ -397,14 +402,15 @@ struct dataEeprom {                         // Structure des données pour le st
   byte                  t_div2_on;
   byte                  t_div2_off;
   byte                  t_div2_tc;
-  byte			a_div2_ext;
+  byte			            a_div2_ext;
   // fin des données eeprom V1
   float                 cnt_calib;
   int                   p_installpv;
-  byte                   s_ssr;
-  byte                   s_relay;
+  byte                  s_ssr;
+  byte                  s_relay;
+  int                   t_calib;
   // fin des données eeprom V2
-  // taille totale : 42 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat
+  // taille totale : 44 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat +2
 };
 
 struct indexEeprom {
@@ -431,13 +437,25 @@ struct indexEeprom {
 SSD1306AsciiAvrI2c oled;
 
 #endif
-
+// ***********************************************************************************
+// ****************** Définitions pour la temperature                  ***************
+// ***********************************************************************************
+// *** Utilise Dallas capteur DS18B20
+#define Dallas
+#if defined (Dallas)
+#define Dallas_REFRESH_PERIOD 10
+#include "OneWire.h"
+#include "DallasTemperature.h"
+#define tempPin                10   // OUT DIGITAL = PIN D10, Température Dallas DS18B20
+OneWire oneWire(tempPin);
+DallasTemperature ds(&oneWire);
+short previous_t = -1;
+short temp = -1;
+#endif
 
 // ***********************************************************************************
 // **********************  FIN DES DEFINITIONS ET DECLARATIONS  **********************
 // ***********************************************************************************
-
-
 
 
 // ***********************************************************************************
@@ -489,6 +507,10 @@ void setup ( ) {
   oled.println ( F(VERSION) );
   oled.println ( );
   oled.println ( F("Starting...") );
+#endif
+
+#if defined (Dallas)
+ds.begin(); 
 #endif
 
   // Chargement de la configuration EEPROM si existante
@@ -769,8 +791,9 @@ void loop ( ) {
     Serial.print ( secondsOnline );
     Serial.print ( F(",") );
     Serial.print ( stats_samples );
+    Serial.print ( F(",") );
+    Serial.print ( temp );
     Serial.print ( F(",END#") );
-
     // *** Reset du Flag pour indiquer que les données ont été traitées   ***
     stats_ready_flag = 0;
 
@@ -1147,6 +1170,8 @@ bool eeConfigRead ( void ) {
     P_INSTALLPV   = pvrConfig.p_installpv;
     S_SSR         = pvrConfig.s_ssr; //sauvegarde etat
     S_Relay       = pvrConfig.s_relay; //sauvegarde etat
+    T_CALIB       = pvrConfig.t_calib; // Calibration Température
+
     return true;
   }
 }
@@ -1180,6 +1205,7 @@ void eeConfigWrite ( void ) {
   pvrConfig.p_installpv     = P_INSTALLPV;
   pvrConfig.s_ssr           = S_SSR ; //sauvegarde etat
   pvrConfig.s_relay         = S_Relay ; //sauvegarde etat
+  pvrConfig.t_calib         = T_CALIB ; // Temp calib
   EEPROM.put ( PVR_EEPROM_START, pvrConfig );
 }
 
@@ -1262,6 +1288,12 @@ void PVRScheduler ( void ) {
     if ( ( secondsOnline % OLED_128X64_REFRESH_PERIOD ) == 5 ) oLedPrint ( 1 );
   }
 #endif
+
+#if defined (Dallas)
+if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
+#endif
+
+
 
   //*** Toutes les 2 secondes : Calcul de la puissance relative à la mesure d'impulsion  ***
   //*** Calcul en 'impulsion par heure'                                                  ***
@@ -1879,4 +1911,21 @@ void pulseExternalInterrupt ( void ) {
     TCNT2 = 0;                  // on remet le compteur à 0
     TCCR2B = 0x07;              // on redémarre le Timer
   }
+}
+
+///////////////////////////////////////////////////////////////////////
+// lecture température                                               //
+// Capteur Dallas                                                    //
+///////////////////////////////////////////////////////////////////////
+void readTemp()
+{
+ds.requestTemperatures();
+short t = ds.getTempCByIndex(0);
+if (t<0 or t> 90)  {
+  temp=previous_t;
+}
+else {
+  previous_t=temp;
+  temp=t+T_CALIB;
+}
 }
