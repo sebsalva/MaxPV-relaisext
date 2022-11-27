@@ -71,8 +71,8 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define MAXPV_VERSION "3.32"
-#define MAXPV_VERSION_FULL "MaxPV! 3.32"
+#define MAXPV_VERSION "3.351"
+#define MAXPV_VERSION_FULL "MaxPV! 3.351"
 
 // Heure solaire
 #define GMT_OFFSET 0 
@@ -107,7 +107,7 @@
 // définition de l'ordre des paramètres de configuration de EcoPV tels que transmis
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
 // on utilise la position 0 pour stocker la version
-#define NB_PARAM 18 // Nombre de paramètres transmis par EcoPV (18 = 17 + VERSION)
+#define NB_PARAM 21 // Nombre de paramètres transmis par EcoPV (21 = 20 + VERSION)
 #define ECOPV_VERSION 0
 #define V_CALIB 1
 #define P_CALIB 2
@@ -126,6 +126,9 @@
 #define A_DIV2_EXT 15
 #define CNT_CALIB 16
 #define P_INSTALLPV 17
+#define S_SSR 18
+#define S_Relay 19
+#define T_CALIB 20
 
 // définition de l'ordre des informations statistiques transmises par EcoPV
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
@@ -133,7 +136,7 @@
 // ATTENTION : dans le reste du programme les 4 index de début de journée sont ajoutés à la suite
 // pour les informations disponibles par l'API
 // ils doivent toujours être situés en toute fin de tableu
-#define NB_STATS 23     // Nombre d'informations statistiques transmis par EcoPV (23 = 22 + VERSION)
+#define NB_STATS 24     // Nombre d'informations statistiques transmis par EcoPV (24 = 23 + VERSION)
 #define NB_STATS_SUPP 4 // Nombre d'informations statistiques supplémentaires
 //#define ECOPV_VERSION 0
 #define V_RMS 1
@@ -158,10 +161,12 @@
 #define STATUS_BYTE 20
 #define ONTIME 21
 #define SAMPLES 22
-#define INDEX_ROUTED_J 23
-#define INDEX_IMPORT_J 24
-#define INDEX_EXPORT_J 25
-#define INDEX_IMPULSION_J 26
+#define TEMP 23
+#define INDEX_ROUTED_J 24
+#define INDEX_IMPORT_J 25
+#define INDEX_EXPORT_J 26
+#define INDEX_IMPULSION_J 27
+
 
 // Définition des channels MQTT
 #define MQTT_STATE         "maxpv/state"
@@ -184,6 +189,7 @@
 #define MQTT_BOOST_MODE      "maxpv/boost"
 #define MQTT_SET_BOOST_MODE  "maxpv/boost/set"
 #define MQTT_STATUS_BYTE   "maxpv/statusbyte"
+#define MQTT_TEMP   "maxpv/temperature"
 
 // ***********************************************************************************
 // ******************* Variables globales de configuration MaxPV! ********************
@@ -222,6 +228,10 @@ short  a_div2_ext = OFF;
 char a_div2_urloff[255] = "http://example.com";
 char a_div2_urlon[255]  = "http://example.com";
 short  etatrelais    = 0;
+
+//Variable Température
+int temp=-1;
+
 
 // ***********************************************************************************
 // *************** Fin des variables globales de configuration MaxPV! ****************
@@ -676,7 +686,7 @@ void setup()
                 jsonConfig ["a_div2_urloff"],
                 255);
       configWrite ( );
-      // envoi config relaisext à ecoPv
+      // envoi config relaisext a ecoPv
       setParamEcoPV ( "a_div2_ext", String(a_div2_ext) );
     }
     else response = F("Bad request or request unknown");
@@ -1184,6 +1194,7 @@ bool serialProcess(void)
       }
       //appel methode gestion relais_ext
       if (a_div2_ext == ON) relais_http ( );
+      
     }
 
     else if (incomingData.startsWith(F("PARAM")))
@@ -1411,6 +1422,8 @@ void mqttTransmit(void)
     mqttClient.publish(MQTT_INDEX_EXPORT, 0, true, buf);
     ecoPVStats[INDEX_IMPULSION].toCharArray(buf, 16);
     mqttClient.publish(MQTT_INDEX_IMPULSION, 0, true, buf);
+    ecoPVStats[TEMP].toCharArray(buf, 16);
+    mqttClient.publish(MQTT_TEMP, 0, true, buf);
     ecoPVStats[TRIAC_MODE].toCharArray(buf, 16); 
     if (buf[0]=='0') strcpy(tmp,"stop");
     else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp,"auto"); 	
@@ -1480,7 +1493,8 @@ void onMqttConnect(bool sessionPresent)
     "\"pl_avail\":\"connected\","
     "\"pl_not_avail\":\"disconnected\","
     "\"uniq_id\":\"#DEVICEID##SENSORID#\","
-    "\"dev_cla\":\"#CLASS#\","
+    "\"dev_cla\":\"#DEVICECLASS#\","
+    "\"stat_cla\":\"#STATECLASS#\","
     "\"name\":\"#SENSORNAME#\","
     "\"stat_t\":\"#STATETOPIC#\","
     "\"unit_of_meas\":\"#UNIT#\""
@@ -1515,7 +1529,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Courant"));
   payload.replace(F("#SENSORNAME#"), F("Courant"));
-  payload.replace(F("#CLASS#"), F("current"));
+  payload.replace(F("#DEVICECLASS#"), F("current"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_I_RMS));
   payload.replace(F("#UNIT#"), "A");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
@@ -1528,7 +1543,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("PuissanceApparente"));
   payload.replace(F("#SENSORNAME#"), F("Puissance apparente"));
-  payload.replace(F("#CLASS#"), F("apparent_power"));
+  payload.replace(F("#DEVICECLASS#"), F("apparent_power"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_APP));
   payload.replace(F("#UNIT#"), "VA");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
@@ -1541,7 +1557,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("FacteurPuissance"));
   payload.replace(F("#SENSORNAME#"), F("Facteur de puissance"));
-  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_COS_PHI));
   payload.replace(F("#UNIT#"), "");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
@@ -1554,8 +1571,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Import_P"));
   payload.replace(F("#SENSORNAME#"), F("Import_P"));
-  payload.replace(F("#CLASS#"), F("power"));
-  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
+   payload.replace(F("#DEVICECLASS#"), F("power"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
   payload.replace(F("#UNIT#"), "W");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
@@ -1580,7 +1597,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Routage_P"));
   payload.replace(F("#SENSORNAME#"), F("Routage_P"));
-  payload.replace(F("#CLASS#"), F("power"));
+  payload.replace(F("#DEVICECLASS#"), F("power"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_ROUTED));
   payload.replace(F("#UNIT#"), "W");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
@@ -1593,7 +1611,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Production_P"));
   payload.replace(F("#SENSORNAME#"), F("Production_P"));
-  payload.replace(F("#CLASS#"), F("power"));
+  payload.replace(F("#DEVICECLASS#"), F("power"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_IMPULSION));
   payload.replace(F("#UNIT#"), "W");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
@@ -1606,7 +1625,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Routage_E"));
   payload.replace(F("#SENSORNAME#"), F("Routage_E"));
-  payload.replace(F("#CLASS#"), F("energy"));
+  payload.replace(F("#DEVICECLASS#"), F("energy"));
+  payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_ROUTED));
   payload.replace(F("#UNIT#"), "KWh");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
@@ -1619,9 +1639,10 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Import_E"));
   payload.replace(F("#SENSORNAME#"), F("Import_E"));
-  payload.replace(F("#CLASS#"), F("energy"));
+ payload.replace(F("#DEVICECLASS#"), F("energy"));
+  payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPORT));
-  payload.replace(F("#UNIT#"), "KWh");
+  payload.replace(F("#UNIT#"), "kWh");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
   
   // MQTT_INDEX_EXPORT
@@ -1632,9 +1653,10 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Export_E"));
   payload.replace(F("#SENSORNAME#"), F("Export_E"));
-  payload.replace(F("#CLASS#"), F("energy"));
+   payload.replace(F("#DEVICECLASS#"), F("energy"));
+  payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_EXPORT));
-  payload.replace(F("#UNIT#"), "KWh");
+  payload.replace(F("#UNIT#"), "kWh");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
   
   // MQTT_INDEX_IMPULSION
@@ -1645,9 +1667,24 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Production_E"));
   payload.replace(F("#SENSORNAME#"), F("Production_E"));
-  payload.replace(F("#CLASS#"), F("energy"));
+   payload.replace(F("#DEVICECLASS#"), F("energy"));
+  payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPULSION));
-  payload.replace(F("#UNIT#"), "KWh");
+  payload.replace(F("#UNIT#"), "kWh");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+  // MQTT_TEMP
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("Routeur_Temp"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Routeur_Temp"));
+  payload.replace(F("#SENSORNAME#"), F("Routeur_Temp"));
+   payload.replace(F("#DEVICECLASS#"), F("temperature"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_TEMP));
+  payload.replace(F("#UNIT#"), "°C");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_TRIAC_MODE
@@ -1658,7 +1695,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("SSR"));
   payload.replace(F("#SENSORNAME#"), F("SSR"));
-  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+  payload.replace(F("#STATECLASS#"), F(""));
   payload.replace(F("#STATETOPIC#"), F(MQTT_TRIAC_MODE));
   payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
                   F("\"cmd_t\":\"#CMDTOPIC#\","
@@ -1674,7 +1712,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Relais"));
   payload.replace(F("#SENSORNAME#"), F("Relais"));
-  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+  payload.replace(F("#STATECLASS#"), F(""));
   payload.replace(F("#STATETOPIC#"), F(MQTT_RELAY_MODE));
   payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
                   F("\"cmd_t\":\"#CMDTOPIC#\","
@@ -1690,7 +1729,8 @@ void onMqttConnect(bool sessionPresent)
   payload = configPayloadTemplate;
   payload.replace(F("#SENSORID#"), F("Boost"));
   payload.replace(F("#SENSORNAME#"), F("Boost"));
-  payload.replace(F("\"dev_cla\":\"#CLASS#\","), F(""));
+  payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+  payload.replace(F("#STATECLASS#"), F(""));
   payload.replace(F("#STATETOPIC#"), F(MQTT_BOOST_MODE));
   payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
                   F("\"cmd_t\":\"#CMDTOPIC#\","
