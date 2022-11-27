@@ -172,6 +172,11 @@
             <td class="text-center"><span id="pimpulsion">-----</span></td>
             <td class="text-center">W</td>
           </tr>
+          <tr>
+            <th scope="row">Température</th>
+            <td class="text-center"><span id="temperature">-----</span></td>
+            <td class="text-center">°C</td>
+          </tr>
         </tbody>
 
         <thead>
@@ -320,6 +325,7 @@
           document.getElementById("status").innerHTML = config[19];
           document.getElementById("ontime").innerHTML = config[20];
           document.getElementById("sample").innerHTML = config[21];
+          document.getElementById("temperature").innerHTML = config[22];
           document.getElementById("indexroutedJ").innerHTML = (parseFloat( config[8] ) - parseFloat( config[22]) ).toFixed(3).toString();
           document.getElementById("indeximportJ").innerHTML = (parseFloat( config[9] ) - parseFloat( config[23]) ).toFixed(3).toString();
           document.getElementById("indexexportJ").innerHTML = (parseFloat( config[10] ) - parseFloat( config[24]) ).toFixed(3).toString();

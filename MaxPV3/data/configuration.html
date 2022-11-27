@@ -1,251 +1,257 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
-
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=0.8">
-  <meta name="description" content="">
-  <meta name="author" content="Bernard Legrand">
-  <title>MaxPv! Paramétrage avancé</title>
-
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
-
-  <!-- Custom styles for this template -->
-  <link href="maxpv.css" rel="stylesheet">
-</head>
-
-<body onload="fillParam ( )">
-
-  <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="/">MaxPV!</a>
-      <span class="badge rounded-pill text-bg-warning" id="ecopvstate">Routeur</span>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse"
-        aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarCollapse">
-        <ul class="navbar-nav me-auto mb-2 mb-md-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Moniteur</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="graph.html">Graphiques</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="wizard.html">Assistant de configuration</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link active" aria-current="page" href="configuration.html">Paramétrage avancé</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="admin.html">Administration</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="maj.html">Update</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="credits.html">Credits</a>
-          </li>
-        </ul>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.8">
+    <meta name="description" content="">
+    <meta name="author" content="Bernard Legrand">
+    <title>MaxPv! Paramétrage avancé</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx"
+      crossorigin="anonymous">
+    <!-- Custom styles for this template -->
+    <link href="maxpv.css" rel="stylesheet">
+  </head>
+  <body onload="fillParam ( )">
+    <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+      <div class="container-fluid"> <a class="navbar-brand" href="/">MaxPV!</a>
+        <span class="badge rounded-pill text-bg-warning" id="ecopvstate">Routeur</span>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse"
+          aria-controls="navbarCollapse"
+          aria-expanded="false"
+          aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span> </button>
+        <div class="collapse navbar-collapse" id="navbarCollapse">
+          <ul class="navbar-nav me-auto mb-2 mb-md-0">
+            <li class="nav-item"> <a class="nav-link" href="index.html">Moniteur</a>
+            </li>
+            <li class="nav-item"> <a class="nav-link" href="graph.html">Graphiques</a>
+            </li>
+            <li class="nav-item"> <a class="nav-link" href="wizard.html">Assistant
+                de configuration</a> </li>
+            <li class="nav-item"> <a class="nav-link active" aria-current="page"
+                href="configuration.html">Paramétrage
+                avancé</a> </li>
+            <li class="nav-item"> <a class="nav-link" href="admin.html">Administration</a>
+            </li>
+            <li class="nav-item"> <a class="nav-link" href="maj.html">Update</a>
+            </li>
+            <li class="nav-item"> <a class="nav-link" href="credits.html">Credits</a>
+            </li>
+          </ul>
+        </div>
       </div>
-    </div>
-  </nav>
-
-  <main class="container-fluid">
-    <div class="bg-light p-5 rounded">
-      <h1>Paramétrage avancé</h1>
-      <p class="lead">
-      <h4></h4>
-      <span>Vous pouvez modifier les paramètres du routeur enregistrés dans l'Arduino Nano et réaliser des actions manuellement.</span><br>
-      </p>
-
-      <p class="lead">
-      <h4>Paramètres du routeur</h4>
-      <span>Aide sur les paramètres : <a href="https://github.com/Jetblack31/EcoPV#calibrage-et-param%C3%A9trage" target="_blank">ici</a>
-      </span>
-      <br>
-      <span class="text-danger">N'oubliez pas de sauvegarder les paramètres en EEPROM et de redémarrer le routeur après les
-        modifications !</span>
-      </p>
-
-      <table class="table text-center align-middle">
-        <thead>
-          <tr class="table-primary">
-            <th colspan="3">Installation</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td scope="row"><b>P_INSTALLPV</b><br>Puissance de l'installation photovoltaïque (Wc)</td> 
-            <td scope="col"><input type="text" class="form-control text-center" id="p_installpv"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_installpv', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>P_RESISTANCE</b><br>Puissance de la résistance commandée (W) </td>
-            <td scope="col"><input type="text" class="form-control text-center" id="p_resistance"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_resistance', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>CNT_CALIB</b><br>Poids des impulsions du compteur d'impulsion (Wh) </td>
-            <td scope="col"><input type="text" class="form-control text-center" id="cnt_calib"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('cnt_calib', this)">Envoyer</button></td>
-          </tr>
-        </tbody>
-        <thead>
-          <tr class="table-primary">
-            <th colspan="3">Calibrage</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td scope="row"><b>V_CALIB</b><br>Facteur de calibrage de la tension</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="v_calib"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('v_calib', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>P_CALIB</b><br>Facteur de calibrage de la puissance</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="p_calib"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_calib', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>PHASE_CALIB</b><br>Facteur de calibrage de la phase</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="phase_calib"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('phase_calib', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>P_OFFSET</b><br>Décalage de puissance active (W)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="p_offset"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_offset', this)">Envoyer</button></td>
-          </tr>
-        </tbody>
-        <thead>
-          <tr class="table-primary">
-            <th colspan="3">Régulation</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td scope="row"><b>P_MARGIN</b><br>Consigne de régulation (W)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="p_margin"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_margin', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>GAIN_P</b><br>Gain proportionnel de régulation</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="gain_p"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('gain_p', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>GAIN_I</b><br>Gain intégral de régulation</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="gain_i"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('gain_i', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>E_RESERVE</b><br>Tolérance de régulation (J)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="e_reserve"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('e_reserve', this)">Envoyer</button></td>
-          </tr>
-        </tbody>
-        <thead>
-          <tr class="table-primary">
-            <th colspan="3">Relais secondaire</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td scope="row"><b>P_DIV2_ACTIVE</b><br>Excédent de production pour relais ON (W)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="p_div2_active"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_div2_active', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>P_DIV2_IDLE</b><br>Importation minimale pour relais OFF (W)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="p_div2_idle"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('p_div2_idle', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>T_DIV2_ON</b><br>Durée minimale ON (min)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="t_div2_on"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('t_div2_on', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>T_DIV2_OFF</b><br>Durée minimale OFF (min)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="t_div2_off"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('t_div2_off', this)">Envoyer</button></td>
-          </tr>
-          <tr>
-            <td scope="row"><b>T_DIV2_TC</b><br>Constante de lissage (min)</td>
-            <td scope="col"><input type="text" class="form-control text-center" id="t_div2_tc"></td>
-            <td scope="col"><button class="btn btn-primary" type="submit"
-                onclick="sendParam ('t_div2_tc', this)">Envoyer</button></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <p class="lead">
-      <h4></h4>
-      <span class="text-danger">N'oubliez pas de sauvegarder les paramètres en EEPROM puis de redémarrer le routeur !</span>
-      </p>
-
-      <div class="d-grid gap-2">
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'saveparam', this )">Sauver des paramètres
-          dans l'EEPROM</button>
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'restart', this  )">Redémarrer le
-          routeur</button>
+    </nav>
+    <main class="container-fluid">
+      <div class="bg-light p-5 rounded">
+        <h1>Paramétrage avancé</h1>
+        <p class="lead"> </p>
+        <h4></h4>
+        <span>Vous pouvez modifier les paramètres du routeur enregistrés dans
+          l'Arduino Nano et réaliser des actions manuellement.</span><br>
+        <p></p>
+        <p class="lead"> </p>
+        <h4>Paramètres du routeur</h4>
+        <span>Aide sur les paramètres : <a href="https://github.com/Jetblack31/EcoPV#calibrage-et-param%C3%A9trage"
+            target="_blank">ici</a>
+        </span> <br>
+        <span class="text-danger">N'oubliez pas de sauvegarder les paramètres en
+          EEPROM et de redémarrer le routeur après les modifications !</span>
+        <p></p>
+        <table class="table text-center align-middle">
+          <thead>
+            <tr class="table-primary">
+              <th colspan="3">Installation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td scope="row"><b>P_INSTALLPV</b><br>
+                Puissance de l'installation photovoltaïque (Wc)</td>
+              <td scope="col"><input class="form-control text-center" id="p_installpv"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_installpv', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>P_RESISTANCE</b><br>
+                Puissance de la résistance commandée (W) </td>
+              <td scope="col"><input class="form-control text-center" id="p_resistance"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_resistance', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>CNT_CALIB</b><br>
+                Poids des impulsions du compteur d'impulsion (Wh) </td>
+              <td scope="col"><input class="form-control text-center" id="cnt_calib"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('cnt_calib', this)">Envoyer</button></td>
+            </tr>
+          </tbody>
+          <thead>
+            <tr class="table-primary">
+              <th colspan="3">Calibrage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td scope="row"><b>V_CALIB</b><br>
+                Facteur de calibrage de la tension</td>
+              <td scope="col"><input class="form-control text-center" id="v_calib"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('v_calib', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>P_CALIB</b><br>
+                Facteur de calibrage de la puissance</td>
+              <td scope="col"><input class="form-control text-center" id="p_calib"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_calib', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>PHASE_CALIB</b><br>
+                Facteur de calibrage de la phase</td>
+              <td scope="col"><input class="form-control text-center" id="phase_calib"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('phase_calib', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>P_OFFSET</b><br>
+                Décalage de puissance active (W)</td>
+              <td scope="col"><input class="form-control text-center" id="p_offset"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_offset', this)">Envoyer</button></td>
+            </tr>
+          </tbody>
+          <thead>
+            <tr class="table-primary">
+              <th colspan="3">Régulation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td scope="row"><b>P_MARGIN</b><br>
+                Consigne de régulation (W)</td>
+              <td scope="col"><input class="form-control text-center" id="p_margin"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_margin', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>GAIN_P</b><br>
+                Gain proportionnel de régulation</td>
+              <td scope="col"><input class="form-control text-center" id="gain_p"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('gain_p', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>GAIN_I</b><br>
+                Gain intégral de régulation</td>
+              <td scope="col"><input class="form-control text-center" id="gain_i"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('gain_i', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>E_RESERVE</b><br>
+                Tolérance de régulation (J)</td>
+              <td scope="col"><input class="form-control text-center" id="e_reserve"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('e_reserve', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>T_CALIB</b><br>
+                Calibration Capteur Température (°C)</td>
+              <td scope="col"><input class="form-control text-center" id="t_calib"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('t_calib', this)">Envoyer</button></td>
+            </tr>
+          </tbody>
+          <thead>
+            <tr class="table-primary">
+              <th colspan="3">Relais secondaire</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td scope="row"><b>P_DIV2_ACTIVE</b><br>
+                Excédent de production pour relais ON (W)</td>
+              <td scope="col"><input class="form-control text-center" id="p_div2_active"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_div2_active', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>P_DIV2_IDLE</b><br>
+                Importation minimale pour relais OFF (W)</td>
+              <td scope="col"><input class="form-control text-center" id="p_div2_idle"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_div2_idle', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>T_DIV2_ON</b><br>
+                Durée minimale ON (min)</td>
+              <td scope="col"><input class="form-control text-center" id="t_div2_on"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('t_div2_on', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>T_DIV2_OFF</b><br>
+                Durée minimale OFF (min)</td>
+              <td scope="col"><input class="form-control text-center" id="t_div2_off"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('t_div2_off', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>T_DIV2_TC</b><br>
+                Constante de lissage (min)</td>
+              <td scope="col"><input class="form-control text-center" id="t_div2_tc"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('t_div2_tc', this)">Envoyer</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="lead"> </p>
+        <h4></h4>
+        <span class="text-danger">N'oubliez pas de sauvegarder les paramètres en
+          EEPROM puis de redémarrer le routeur !</span>
+        <p></p>
+        <div class="d-grid gap-2"> <button class="btn btn-warning" type="submit"
+            onclick="sendAction ( 'saveparam', this )">Sauver
+            des paramètres dans l'EEPROM</button> <button class="btn btn-warning"
+            type="submit"
+            onclick="sendAction ( 'restart', this  )">Redémarrer
+            le routeur</button> </div>
+        <br>
+        <p class="lead"> </p>
+        <h4>Actions avancées</h4>
+        <span>Cliquer pour réaliser les actions avancées suivantes :</span>
+        <p></p>
+        <div class="d-grid gap-2"> <button class="btn btn-warning" type="submit"
+            onclick="sendAction ( 'loadparam', this )">Charger
+            les paramètres de l'EEPROM</button> <button class="btn btn-warning"
+            type="submit"
+            onclick="sendAction ( 'saveparam', this )">Sauver
+            des paramètres dans l'EEPROM</button> <button class="btn btn-warning"
+            type="submit"
+            onclick="sendAction ( 'saveindex', this )">Sauver
+            les index en EEPROM</button> <button class="btn btn-warning" type="submit"
+            onclick="sendAction ( 'restart', this )">Redémarrer
+            le routeur</button> <button class="btn btn-warning" type="submit" onclick="sendAction ( 'rebootesp', this )">Redémarrer
+            le Webserver</button> <button class="btn btn-danger" type="submit"
+            onclick="sendAction ( 'resetindex', this )">Remettre
+            les index à zéro</button> <button class="btn btn-danger" type="submit"
+            onclick="sendAction ( 'format', this )">Formater
+            l'EEPROM</button> </div>
+        <br>
+        <div class="fixed-bottom" id="liveAlertPlaceholder"></div>
       </div>
-
-      <br>
-
-      <p class="lead">
-      <h4>Actions avancées</h4>
-      <span>Cliquer pour réaliser les actions avancées suivantes :</span>
-      </p>
-
-
-      <div class="d-grid gap-2">
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'loadparam', this )">Charger les paramètres
-          de l'EEPROM</button>
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'saveparam', this )">Sauver des paramètres
-          dans l'EEPROM</button>
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'saveindex', this )">Sauver les
-          index en EEPROM</button>
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'restart', this )">Redémarrer le
-          routeur</button>
-        <button class="btn btn-warning" type="submit" onclick="sendAction ( 'rebootesp', this )">Redémarrer le
-          Webserver</button>
-        <button class="btn btn-danger" type="submit" onclick="sendAction ( 'resetindex', this )">Remettre les index à
-          zéro</button>
-        <button class="btn btn-danger" type="submit" onclick="sendAction ( 'format', this )">Formater
-          l'EEPROM</button>
-      </div>
-      <br>
-      <div class="fixed-bottom" id="liveAlertPlaceholder"></div>
-    </div>
-  </main>
-
-
-  <script>
-
-    const nb_param = 16;
+    </main>
+    <script>
+    const nb_param = 20;
     const paramList = ["FAKE", "v_calib", "p_calib", "phase_calib", "p_offset",
       "p_resistance", "p_margin", "gain_p", "gain_i",
       "e_reserve", "p_div2_active", "p_div2_idle", "t_div2_on",
-      "t_div2_off", "t_div2_tc", "cnt_calib", "p_installpv"];
-
+      "t_div2_off", "t_div2_tc", "r_ext", "cnt_calib", "p_installpv", "e_ssr", "e_relay", "t_calib"];
+      
+      
     const alert = (message, type, eleId) => {
       const wrapper = document.createElement('div')
       wrapper.innerHTML = [
@@ -287,8 +293,11 @@
         if (this.readyState == 4 && this.status == 200) {
           var config = this.responseText.split(",");
           for (let pas = 0; pas < nb_param; pas++) {
-            document.getElementById(paramList[pas + 1]).value = config[pas];
-          }
+            var element = document.getElementById(paramList[pas + 1]);
+            if(typeof(element) != 'undefined' && element != null){
+            element.value = config[pas];}
+            }
+          
         }
       };
       xhttp1.open("GET", "api/get?allparam", true); xhttp1.send();
@@ -311,15 +320,13 @@
         };
       xhttp5.open("GET", "api/get?ping", true); xhttp5.send();
     }, 1000); </script>
-
-  <script>
+    <script>
     setTimeout(function () {
       bootstrap.Alert.getOrCreateInstance(document.querySelector(".alert")).close();
     }, 2000)
   </script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-A3rJD856KowSb7dwlZdYEkO39Gagi7vIsF0jrRAoQmDKKtQBHUuLZ9AsSv4jD4Xa" crossorigin="anonymous"></script>
-
-</body>
-
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"
+integrity="sha384-A3rJD856KowSb7dwlZdYEkO39Gagi7vIsF0jrRAoQmDKKtQBHUuLZ9AsSv4jD4Xa"
+crossorigin="anonymous"></script>
+  </body>
 </html>
