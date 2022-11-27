@@ -1,5 +1,6 @@
 # Fork de MaxPV
-Fork du Routeur Solaire MaxPV, basé sur la version 3.32
+Fork du Routeur Solaire MaxPV, basé sur la version 3.35.
+
 Les modifications apportées sont les suivantes :
 
 * Utilisation d'un Relais HTTP (appel du relais via HTTP pour ON et OFF) en place du relais physique (l'utilisation du relais physique est toujours possible)
