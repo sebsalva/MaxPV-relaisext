@@ -69,7 +69,7 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define VERSION            "3.321"      // Version logicielle
+#define VERSION            "3.322"      // Version logicielle
 #define SERIAL_BAUD      500000       // Vitesse de la liaison port série
 #define SERIALTIMEOUT       100       // Timeout pour les interrogations sur liaison série en ms
 
@@ -201,8 +201,8 @@ int   P_INSTALLPV   =     3000;          // Valeur en Wc de la puissance de l'in
 byte   S_SSR         =     AUTOM;         // sauvegarde etat Automatique par défaut
 byte   S_Relay       =     AUTOM;         // sauvegarde etat Automatique par défaut
 
-int    T_CALIB     =       0;           // Calibration Température
-
+int    T_CALIB     =       0;             // Calibration Température
+unsigned int T_MAX =       55;            // Température Max
 
 // ***********************************************************************************************************************
 // energyToDelay [ ] = Tableau du retard de déclenchement du SSR/TRIAC en fonction du routage de puissance désiré.
@@ -241,7 +241,7 @@ byte energyToDelay [ ] = {
 // ***********************************************************************************
 // *********  Définition de la structure de la configuration du routeur     **********
 // ***********************************************************************************
-#define NB_PARAM           20          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
+#define NB_PARAM           21          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
 
 struct paramInConfig {                  // Structure pour la manipulation des données de configuration
   byte dataType;                        // 0 : int, 1 : float, 4 : byte
@@ -271,8 +271,9 @@ const paramInConfig pvrParamConfig [ ] = {
   { 1,        0,    1000,   &CNT_CALIB      },       // CNT_CALIB
   { 0,      100,   30000,   &P_INSTALLPV    },       // P_INSTALLPV
   { 4,        0,      10,   &S_SSR          },       // S_SSR sauvegarde
-  { 4,        0,      10,   &S_Relay        },        // S_Relay sauvegarde
-  { 0,        -20,      20, &T_CALIB        }        // T_CALIB
+  { 4,        0,      10,   &S_Relay        },       // S_Relay sauvegarde
+  { 0,        -20,    20,   &T_CALIB        },        // T_CALIB
+  { 0,        15,     90,   &T_MAX          }          // T_MAX
 };
 
 // ***********************************************************************************
@@ -409,6 +410,7 @@ struct dataEeprom {                         // Structure des données pour le st
   byte                  s_ssr;
   byte                  s_relay;
   int                   t_calib;
+  int                   t_max;
   // fin des données eeprom V2
   // taille totale : 44 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat +2
 };
@@ -450,8 +452,11 @@ SSD1306AsciiAvrI2c oled;
 OneWire oneWire(tempPin);
 DallasTemperature ds(&oneWire);
 short previous_t = -1;
-short temp = -1;
 #endif
+short temp = -1;
+unsigned short hysteresis = 1;      // hysteresis 
+bool temp_bool=OFF;                 // bool utilisé pour stocker passage au dessus température seuil + hysteresis 
+          
 
 // ***********************************************************************************
 // **********************  FIN DES DEFINITIONS ET DECLARATIONS  **********************
@@ -1171,6 +1176,7 @@ bool eeConfigRead ( void ) {
     S_SSR         = pvrConfig.s_ssr; //sauvegarde etat
     S_Relay       = pvrConfig.s_relay; //sauvegarde etat
     T_CALIB       = pvrConfig.t_calib; // Calibration Température
+    T_MAX         = pvrConfig.t_max; // Température Max
 
     return true;
   }
@@ -1206,9 +1212,9 @@ void eeConfigWrite ( void ) {
   pvrConfig.s_ssr           = S_SSR ; //sauvegarde etat
   pvrConfig.s_relay         = S_Relay ; //sauvegarde etat
   pvrConfig.t_calib         = T_CALIB ; // Temp calib
+  pvrConfig.t_max           = T_MAX ; // Temp Max
   EEPROM.put ( PVR_EEPROM_START, pvrConfig );
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // indexRead                                                                         //
@@ -1587,7 +1593,9 @@ void zeroCrossingInterrupt ( void ) {
     // *** PASSAGE PAR ZERO - ON A TERMINE UNE DEMI PERIODE ***
     // gestion de l'antirebond du passage à 0 en calculant de temps
     // entre 2 passages à 0 qui doivent être séparés de 8 ms au moins
-    if ( triacMode == FORCE ) TRIAC_ON; else TRIAC_OFF;
+    
+    // TRIAC FORCE et Temperature_test
+    if ( triacMode == FORCE && (temp <= T_MAX - hysteresis) ) TRIAC_ON; else TRIAC_OFF;
     TCCR1B = 0x00;                        // arrêt du Timer par sécurité
     TCNT1  = 0x00;                        // on remet le compteur à 0 par sécurité
     TCCR1B = 0x05;                        // on démarre le Timer par pas de 64 us
@@ -1640,7 +1648,10 @@ void zeroCrossingInterrupt ( void ) {
 
     // si on n'est pas en mode automatique, on gèle la commande routage (==> arrêt Timer et pas d'accumulation de puissance routée)
     // mais on a quand même fait auparavant les calculs de régulation
-    if ( triacMode != AUTOM ) {
+    //ajout Temperature_test
+    if ( temp >= T_MAX + hysteresis ) temp_bool=ON;
+    if ( temp <= T_MAX - hysteresis ) temp_bool=OFF;
+    if ( triacMode != AUTOM || temp_bool) {
       TCCR1B = 0;
       TCNT1  = 0;
       controlCommand = 0;
@@ -1855,7 +1866,7 @@ ISR ( ADC_vect ) {
 // Interrupt service routine Timer1 pour générer le pulse de déclenchement du TRIAC //
 //////////////////////////////////////////////////////////////////////////////////////
 ISR ( TIMER1_COMPA_vect ) {   // TCNT1 = OCR1A : instant de déclenchement du SSR/TRIAC
-
+ 
   TRIAC_ON;
   // chargement du compteur pour que le pulse SSR/TRIAC s'arrête à l'instant PULSE_END
   // relativement au passage à 0 (nécessite PULSE_END > OCR1A)
