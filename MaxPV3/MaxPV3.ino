@@ -42,20 +42,22 @@
 // ******************                   LIBRAIRIES                     ***************
 // ***********************************************************************************
 
-#include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <TickerScheduler.h>
 #include <ESP8266WiFi.h>
+#include "ESP8266mDNS.h"  // multicast DNS
 #include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPAsyncWiFiManager.h>
 #include <AsyncMqtt_Generic.h>
 #include <AsyncElegantOTA.h>
 #include <DNSServer.h>
-#include <NTPClient.h>
+//#include <NTPClient.h>
+#include <NTP.h>
 #include <SimpleFTPServer.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
+
 
 // ***      ATTENTION : NE PAS ACTIVER LE DEBUG SERIAL SUR AUCUNE LIBRAIRIE        ***
 
@@ -71,14 +73,18 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define MAXPV_VERSION "3.351"
-#define MAXPV_VERSION_FULL "MaxPV! 3.351"
+#define MAXPV_VERSION "3.352"
+#define MAXPV_VERSION_FULL "MaxPV! 3.352"
 
 // Heure solaire
 #define GMT_OFFSET 0 
 
 // SSID pour le Config Portal
 #define SSID_CP "MaxPV"
+
+// nom mDNS pour accès http://xxx.local
+#define M_DNS "maxpv"
+ 
 
 // Login et password pour le service FTP
 #define LOGIN_FTP "maxpv"
@@ -107,7 +113,7 @@
 // définition de l'ordre des paramètres de configuration de EcoPV tels que transmis
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
 // on utilise la position 0 pour stocker la version
-#define NB_PARAM 21 // Nombre de paramètres transmis par EcoPV (21 = 20 + VERSION)
+#define NB_PARAM 22 // Nombre de paramètres transmis par EcoPV (22 = 21 + VERSION)
 #define ECOPV_VERSION 0
 #define V_CALIB 1
 #define P_CALIB 2
@@ -129,6 +135,7 @@
 #define S_SSR 18
 #define S_Relay 19
 #define T_CALIB 20
+#define T_MAX 21
 
 // définition de l'ordre des informations statistiques transmises par EcoPV
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
@@ -196,10 +203,10 @@
 // ***********************************************************************************
 
 // Configuration IP statique mode STA
-char static_ip[16] = "192.168.1.250";
-char static_gw[16] = "192.168.1.1";
+char static_ip[16] = "any";
+char static_gw[16] = "any";
 char static_sn[16] = "255.255.255.0";
-char static_dns1[16] = "192.168.1.1";
+char static_dns1[16] = "any";
 char static_dns2[16] = "8.8.8.8";
 
 // Port HTTP                  
@@ -232,6 +239,9 @@ short  etatrelais    = 0;
 //Variable Température
 int temp=-1;
 
+short hysteresis = 1;
+short tempmax = 55;
+short tempactive = OFF; 
 
 // ***********************************************************************************
 // *************** Fin des variables globales de configuration MaxPV! ****************
@@ -294,7 +304,8 @@ WiFiServer telnetServer(TELNET_PORT);
 WiFiClient tcpClient;
 AsyncMqttClient mqttClient;
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", 3600 * GMT_OFFSET, 600000);
+//NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", 3600 * GMT_OFFSET, 600000);
+NTP timeClient(ntpUDP);
 FtpServer ftpSrv;
 
 // ***********************************************************************************
@@ -365,20 +376,19 @@ void setup()
 
   Serial.println();
 
+  AsyncWiFiManager wifiManager(&webServer, &dnsServer);
+  wifiManager.setAPCallback(configModeCallback);
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  wifiManager.setDebugOutput(true);
+  if (static_ip != "any")
+  { 
   _ip.fromString(static_ip);
   _gw.fromString(static_gw);
   _sn.fromString(static_sn);
   _dns1.fromString(static_dns1);
   _dns2.fromString(static_dns2);
-
-  AsyncWiFiManager wifiManager(&webServer, &dnsServer);
-
-  wifiManager.setAPCallback(configModeCallback);
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setDebugOutput(true);
   wifiManager.setSTAStaticIPConfig(_ip, _gw, _sn, _dns1, _dns2);
-  // wifiManager.setAPStaticIPConfig ( IPAddress ( 192, 168, 4, 1 ), IPAddress ( 192, 168, 4, 1 ), IPAddress ( 255, 255, 255, 0 ) );
-
+  }
   if (APmode)
   { // Si on démarre en mode point d'accès / on efface le dernier réseau wifi connu pour forcer le mode AP
     wifiManager.resetSettings();
@@ -393,6 +403,7 @@ void setup()
     Serial.println(_sn.toString());
     Serial.println(_dns1.toString());
     Serial.println(_dns2.toString());
+    WiFi.mode(WIFI_STA);
   }
 
   wifiManager.autoConnect(SSID_CP);
@@ -404,6 +415,11 @@ void setup()
   Serial.println(WiFi.subnetMask());
   Serial.println(WiFi.dnsIP(0));
   Serial.println(WiFi.dnsIP(1));
+
+  // Configuration NTP 
+  timeClient.timeZone(1);
+  timeClient.ruleDST("CEST", Last, Sun, Mar, 2, 120); // last sunday in march 2:00, timetone +120min (+1 GMT + 1h summertime offset)
+  timeClient.ruleSTD("CET", Last, Sun, Oct, 3, 60); // last sunday in october 3:00, timezone +60min (+1 GMT)
 
   // Mise à jour des variables globales de configuration IP (systématique même si pas de changement)
   WiFi.localIP().toString().toCharArray(static_ip, 16);
@@ -606,7 +622,7 @@ void setup()
         if ( contactEcoPV ) response = F("running");
         else response = F("offline");
       else if ( request->hasParam ( "time" ) )
-        response = timeClient.getFormattedTime ( );
+        response = timeClient.formattedTime("%T");
       else response = F("Unknown request");
       request->send ( 200, "text/plain", response );
     }
@@ -685,9 +701,14 @@ void setup()
       strlcpy ( a_div2_urloff,
                 jsonConfig ["a_div2_urloff"],
                 255);
+      //config temperature
+      tempactive = jsonConfig["temp_active"];
+      tempmax = jsonConfig["temp_max"];
       configWrite ( );
-      // envoi config relaisext a ecoPv
-      setParamEcoPV ( "a_div2_ext", String(a_div2_ext) );
+      // envoi config relaisHTTP et tempmax a ecoPv
+      setParamEcoPV ( "15", String(a_div2_ext) );
+      setParamEcoPV ( "21", String(tempmax) );
+      saveConfigEcoPV() ; // to be checked
     }
     else response = F("Bad request or request unknown");
     request->send ( 200, "text/plain", response );
@@ -749,6 +770,13 @@ void setup()
   AsyncElegantOTA.setID(MAXPV_VERSION_FULL);
   AsyncElegantOTA.begin(&webServer);
   webServer.begin();
+
+  // Demarrage multicast DNS avec nom maxpv
+  if (MDNS.begin(M_DNS)) {
+    MDNS.addService("http", "tcp", 80);
+    tcpClient.println(F("mDNS démarré ! accès http://maxpv.local/"));
+  }
+
   timeClient.begin();
   tcpClient.println(F("Services web configurés et démarrés !"));
   tcpClient.print(F("Port web : "));
@@ -913,8 +941,12 @@ void setup()
   {
     generalCounterSecond++;
 
-    // traitement du mode BOOST
-    if (boostTime > 0) {
+    // traitement du mode BOOST 
+    //ajout température. Si température > XXX on stoppe le boost
+      if ( (tempactive == ON ) && (temp >= tempmax+hysteresis) )
+        boostTime=0;
+      
+    if (boostTime > 0) { 
       if ( burstCnt <= ( ( BURST_PERIOD * int ( boostRatio ) ) / 100 ) ) SSRModeEcoPV(FORCE);
       else SSRModeEcoPV(STOP);
       boostTime--;
@@ -933,12 +965,12 @@ void setup()
     }
     // fin de traitement MQTT
 
-    
+    // traitement mDNS
+    MDNS.update();
   },
   nullptr, true);
   delay(1000);
 }
-
 
 
 ///////////////////////////////////////////////////////////////////
@@ -947,11 +979,11 @@ void setup()
 ///////////////////////////////////////////////////////////////////
 void loop()
 {
-
+  
   // Exécution des tâches récurrentes Ticker
   ts.update();
-}
 
+}
 
 
 ///////////////////////////////////////////////////////////////////
@@ -976,16 +1008,16 @@ bool configRead(void)
       {
         //Serial.println(F("\n\nRestauration de la configuration IP..."));
         strlcpy(static_ip,
-                jsonConfig["ip"] | "192.168.1.250",
+                jsonConfig["ip"] | "any",
                 16);
         strlcpy(static_gw,
-                jsonConfig["gateway"] | "192.168.1.1",
+                jsonConfig["gateway"] | "any",
                 16);
         strlcpy(static_sn,
                 jsonConfig["subnet"] | "255.255.255.0",
                 16);
         strlcpy(static_dns1,
-                jsonConfig["dns1"] | "192.168.1.1",
+                jsonConfig["dns1"] | "any",
                 16);
         strlcpy(static_dns2,
                 jsonConfig["dns2"] | "8.8.8.8",
@@ -1017,7 +1049,10 @@ bool configRead(void)
                 255);
         strlcpy(a_div2_urloff,
                 jsonConfig["a_div2_urloff"] | "http://192.168.1.1",
-                255);
+                255); 
+        //config temperature
+        tempactive = jsonConfig["temp_active"] | OFF;
+        tempmax = jsonConfig["temp_max"] | 55;
       }
       else
       {
@@ -1062,7 +1097,9 @@ void configWrite(void)
   jsonConfig["a_div2_ext"] = a_div2_ext;
   jsonConfig["a_div2_urlon"] = a_div2_urlon;
   jsonConfig["a_div2_urloff"] = a_div2_urloff;
-
+  //temperature
+  jsonConfig["temp_active"] = tempactive;
+  jsonConfig["temp_max"] = tempmax;
   File configFile = LittleFS.open(F("/config.json"), "w");
   serializeJson(jsonConfig, configFile);
   configFile.close();
@@ -1194,7 +1231,8 @@ bool serialProcess(void)
       }
       //appel methode gestion relais_ext
       if (a_div2_ext == ON) relais_http ( );
-      
+      // temperature
+      temp=ecoPVStats[TEMP].toInt();
     }
 
     else if (incomingData.startsWith(F("PARAM")))
@@ -1366,7 +1404,7 @@ void initHistoric(void)
 
 void recordHistoricData(void)
 {
-  energyIndexHistoric[historyCounter].time = timeClient.getEpochTime();
+  energyIndexHistoric[historyCounter].time = timeClient.epoch();
   energyIndexHistoric[historyCounter].eRouted = ecoPVStats[INDEX_ROUTED].toFloat();
   energyIndexHistoric[historyCounter].eImport = ecoPVStats[INDEX_IMPORT].toFloat();
   energyIndexHistoric[historyCounter].eExport = ecoPVStats[INDEX_EXPORT].toFloat();
@@ -1443,9 +1481,10 @@ void mqttTransmit(void)
 void timeScheduler(void)
 {
   // Le scheduler est exécuté toutes les minutes
-  int day = timeClient.getDay();
-  int hour = timeClient.getHours();
-  int minute = timeClient.getMinutes();
+  int day = timeClient.day();
+  int hour = timeClient.hours();
+  int minute = timeClient.minutes();
+
 
   // Mise à jour des index de début de journée en début de journée solaire à 00H00
   if ( ( hour == 0 ) && ( minute == 0 ) ) setRefIndexJour ( );
