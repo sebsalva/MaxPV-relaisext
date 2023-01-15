@@ -45,7 +45,7 @@
 #include <ArduinoJson.h>
 #include <TickerScheduler.h>
 #include <ESP8266WiFi.h>
-#include "ESP8266mDNS.h"  // multicast DNS
+#include <ESP8266mDNS.h>  // multicast DNS
 #include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPAsyncWiFiManager.h>
@@ -73,8 +73,8 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define MAXPV_VERSION "3.352"
-#define MAXPV_VERSION_FULL "MaxPV! 3.352"
+#define MAXPV_VERSION "3.354"
+#define MAXPV_VERSION_FULL "MaxPV! 3.354"
 
 // Heure solaire
 #define GMT_OFFSET 0 
@@ -84,7 +84,13 @@
 
 // nom mDNS pour accès http://xxx.local
 #define M_DNS "maxpv"
- 
+
+// URL appel Dimmer
+#define DIMMER_URL "/?POWER="
+#define DIMMER_URL_STATE "/state"
+
+#define DIMMER_POW_HYSTERESIS 1 // Marge en % pour laquelle la puissance du dimmer n'est pas modifiée
+#define DIMMER_CHECK 120         // Verification Ping DIMMER toutes les XX secondes 
 
 // Login et password pour le service FTP
 #define LOGIN_FTP "maxpv"
@@ -131,7 +137,7 @@
 #define T_DIV2_TC 14
 #define A_DIV2_EXT 15
 #define CNT_CALIB 16
-#define P_INSTALLPV 17
+#define P_INSTALLPV 17 
 #define S_SSR 18
 #define S_Relay 19
 #define T_CALIB 20
@@ -193,6 +199,8 @@
 #define MQTT_SET_TRIAC_MODE    "maxpv/triacmode/set"
 #define MQTT_RELAY_MODE    "maxpv/relaymode"
 #define MQTT_SET_RELAY_MODE    "maxpv/relaymode/set"
+#define MQTT_DIMMER_MODE    "maxpv/dimmermode"
+#define MQTT_SET_DIMMER_MODE    "maxpv/dimmermode/set"
 #define MQTT_BOOST_MODE      "maxpv/boost"
 #define MQTT_SET_BOOST_MODE  "maxpv/boost/set"
 #define MQTT_STATUS_BYTE   "maxpv/statusbyte"
@@ -203,10 +211,10 @@
 // ***********************************************************************************
 
 // Configuration IP statique mode STA
-char static_ip[16] = "any";
-char static_gw[16] = "any";
+char static_ip[16] = "192.168.1.200";
+char static_gw[16] = "192.168.1.1";
 char static_sn[16] = "255.255.255.0";
-char static_dns1[16] = "any";
+char static_dns1[16] = "192.168.1.1";
 char static_dns2[16] = "8.8.8.8";
 
 // Port HTTP                  
@@ -229,16 +237,24 @@ char mqttUser[40] = "";             // Utilisateur du serveur MQTT
 char mqttPass[40] = "";             // Mot de passe du serveur MQTT
 int mqttActive = OFF;               // MQTT actif (= ON) ou non (= OFF)
 
-
 // Variables relais_ext
 short  a_div2_ext = OFF;
 char a_div2_urloff[255] = "http://example.com";
 char a_div2_urlon[255]  = "http://example.com";
 short  etatrelais    = 0;
 
-//Variable Température
-int temp=-1;
+// Configuration Dimmer
+short  dimmer_m = OFF;
+char dimmer_ip[16] = "dimmer1.local"; // nom ou IP du dimmer
+String dimmer_ip2 = "192.168.1.80";   // IP du dimmer copie de dimmer_ip ou obtenu par résolution
+int dimmer_pow;                       // puissance dimmer
+short dimmer_act = OFF;               // mode dimmer
+short dimmer_count  = 0;              // compteur utilisé pour ping
+short dimmer_sumpourcent = 100;       // somme des porcentages de fonctionnement max sur tous les dimmers
+int dimmer_sumpow = 1000;             // somme des puissances sur tous les dimmers
 
+// Gestion Température
+int temp=-1;
 short hysteresis = 1;
 short tempmax = 55;
 short tempactive = OFF; 
@@ -422,12 +438,13 @@ void setup()
   timeClient.ruleSTD("CET", Last, Sun, Oct, 3, 60); // last sunday in october 3:00, timezone +60min (+1 GMT)
 
   // Mise à jour des variables globales de configuration IP (systématique même si pas de changement)
+  if (static_ip != "any"){
   WiFi.localIP().toString().toCharArray(static_ip, 16);
   WiFi.gatewayIP().toString().toCharArray(static_gw, 16);
   WiFi.subnetMask().toString().toCharArray(static_sn, 16);
   WiFi.dnsIP(0).toString().toCharArray(static_dns1, 16);
   WiFi.dnsIP(1).toString().toCharArray(static_dns2, 16);
-
+  }
   // Sauvegarde de la configuration si nécessaire
   if (shouldSaveConfig)
   {
@@ -618,6 +635,14 @@ void setup()
           else response = F("OFF");
         }
       }
+      else if ( request->hasParam ( "dimmerstate" ) ) {
+        if ( dimmer_m == STOP ) response = F("STOP");
+        else if ( dimmer_m == FORCE ) response = F("FORCE");
+        else if ( dimmer_m == AUTOM ) {
+          if ( dimmer_act == ON ) response = F("ON");
+          else response = F("OFF");
+        }
+      }
       else if ( request->hasParam ( "ping" ) )
         if ( contactEcoPV ) response = F("running");
         else response = F("offline");
@@ -655,6 +680,14 @@ void setup()
       if ( mystring == F("stop") ) SSRModeEcoPV ( STOP );
       else if ( mystring == F("force") ) SSRModeEcoPV ( FORCE );
       else if ( mystring == F("auto") ) SSRModeEcoPV ( AUTOM );
+      else response = F("Bad request");
+    }
+    else if ( ( request->hasParam ( "dimmermode" ) ) && ( request->hasParam ( "value" ) ) ) {
+      mystring = request->getParam("value")->value();
+      mystring.trim();
+      if ( mystring == F("stop") ) {dimmer_m = STOP; configWrite();}
+      else if ( mystring == F("force") ) {dimmer_m = FORCE; configWrite();}
+      else if ( mystring == F("auto") ) {dimmer_m = AUTOM; configWrite();}
       else response = F("Bad request");
     }
     else if ( ( request->hasParam ( "configmaxpv" ) ) && ( request->hasParam ( "value" ) ) ) {
@@ -701,6 +734,13 @@ void setup()
       strlcpy ( a_div2_urloff,
                 jsonConfig ["a_div2_urloff"],
                 255);
+      //config dimmer
+      dimmer_m = jsonConfig["dimmer_m"];
+      strlcpy ( dimmer_ip,
+                jsonConfig ["dimmer_ip"],
+                16);
+      dimmer_sumpourcent =jsonConfig["dimmer_sumpourcent"];
+      dimmer_sumpow = jsonConfig["dimmer_sumpow"];       
       //config temperature
       tempactive = jsonConfig["temp_active"];
       tempmax = jsonConfig["temp_max"];
@@ -781,7 +821,7 @@ void setup()
   tcpClient.println(F("Services web configurés et démarrés !"));
   tcpClient.print(F("Port web : "));
   tcpClient.println(httpPort);
-  if (mqttActive = ON) {
+  if (mqttActive == ON) {
     _ipmqtt.fromString(mqttIP);
     if (strlen(mqttUser) != 0) {
        mqttClient.setCredentials(mqttUser,mqttPass);
@@ -842,6 +882,8 @@ void setup()
   };
   tcpClient.println(F("\n*** Fin du Setup ***\n"));
 
+  // Dimmer init
+  dimmer_init( );
 
   // ***********************************************************************
   // ********      DEFINITION DES TACHES RECURRENTES DE TICKER      ********
@@ -967,6 +1009,10 @@ void setup()
 
     // traitement mDNS
     MDNS.update();
+
+    // traitement Gestion Dimmer
+    if ( dimmer_m != OFF || dimmer_act) 
+      dimmer_engine() ; 
   },
   nullptr, true);
   delay(1000);
@@ -1050,6 +1096,13 @@ bool configRead(void)
         strlcpy(a_div2_urloff,
                 jsonConfig["a_div2_urloff"] | "http://192.168.1.1",
                 255); 
+        //config dimmer
+        dimmer_m = jsonConfig["dimmer_m"];
+        strlcpy ( dimmer_ip,
+                jsonConfig ["dimmer_ip"] | "dimmer1.local",
+                16);   
+        dimmer_sumpourcent =jsonConfig["dimmer_sumpourcent"];
+        dimmer_sumpow = jsonConfig["dimmer_sumpow"]; 
         //config temperature
         tempactive = jsonConfig["temp_active"] | OFF;
         tempmax = jsonConfig["temp_max"] | 55;
@@ -1097,6 +1150,11 @@ void configWrite(void)
   jsonConfig["a_div2_ext"] = a_div2_ext;
   jsonConfig["a_div2_urlon"] = a_div2_urlon;
   jsonConfig["a_div2_urloff"] = a_div2_urloff;
+  //config dimmer
+  jsonConfig["dimmer_m"] = dimmer_m;
+  jsonConfig["dimmer_ip"] = dimmer_ip;
+  jsonConfig["dimmer_sumpourcent"] = dimmer_sumpourcent;
+  jsonConfig["dimmer_sumpow"] = dimmer_sumpow;
   //temperature
   jsonConfig["temp_active"] = tempactive;
   jsonConfig["temp_max"] = tempmax;
@@ -1118,10 +1176,6 @@ bool telnetDiscoverClient(void)
   {
     tcpClient = telnetServer.available();
     clearScreen();
-    tcpClient.println(F("\nMaxPV! par Bernard Legrand (2022)."));
-    tcpClient.print(F("Version : "));
-    tcpClient.println(MAXPV_VERSION);
-    tcpClient.println();
     tcpClient.println(F("Configuration IP : "));
     tcpClient.print(F("Adresse IP : "));
     tcpClient.println(WiFi.localIP());
@@ -1448,8 +1502,16 @@ void mqttTransmit(void)
     if (power < 0)  sprintf(tmp, "%d", -power);
     else  strcpy(tmp,"auto");
     mqttClient.publish(MQTT_P_EXPORT, 0, true, tmp);
+    // stat routage = P routage EcoPv + P routage Dimmer
+    power  = ecoPVStats[P_ROUTED].toInt();
+    if (dimmer_m == AUTOM && power == 0) {
+      sprintf(tmp, "%d", dimmer_pow);
+      mqttClient.publish(MQTT_P_ROUTED, 0, true, tmp);
+    }
+    else {   
     ecoPVStats[P_ROUTED].toCharArray(buf, 16);
     mqttClient.publish(MQTT_P_ROUTED, 0, true, buf);
+    }
     ecoPVStats[P_IMPULSION].toCharArray(buf, 16);
     mqttClient.publish(MQTT_P_IMPULSION, 0, true, buf);
     ecoPVStats[INDEX_ROUTED].toCharArray(buf, 16);
@@ -1463,17 +1525,21 @@ void mqttTransmit(void)
     ecoPVStats[TEMP].toCharArray(buf, 16);
     mqttClient.publish(MQTT_TEMP, 0, true, buf);
     ecoPVStats[TRIAC_MODE].toCharArray(buf, 16); 
-    if (buf[0]=='0') strcpy(tmp,"stop");
-    else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp,"auto"); 	
+    if (buf[0]=='0') strcpy(tmp, "stop");
+    else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp, "auto"); 	
     mqttClient.publish(MQTT_TRIAC_MODE, 0, true, tmp);
     ecoPVStats[RELAY_MODE].toCharArray(buf, 16);
-    if (buf[0]=='0') strcpy(tmp,"stop");
-    else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp,"auto"); 
+    if (buf[0]=='0') strcpy(tmp, "stop");
+    else if (buf[0]=='1') strcpy(tmp,"force"); else strcpy(tmp, "auto"); 
     mqttClient.publish(MQTT_RELAY_MODE, 0, true, tmp);
     ecoPVStats[STATUS_BYTE].toCharArray(buf, 16);
     mqttClient.publish(MQTT_STATUS_BYTE, 0, true, buf);
     if (boostTime == -1) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off");
     else mqttClient.publish(MQTT_BOOST_MODE, 0, true, "on");
+    // dimmer
+    if (dimmer_m == OFF) strcpy(tmp, "stop");
+    else if (dimmer_m == FORCE) strcpy(tmp,"force"); else strcpy(tmp, "auto"); 
+    mqttClient.publish(MQTT_DIMMER_MODE, 0, true, tmp);
   }
   else mqttClient.connect();        // Sinon on ne transmet pas mais on tente la reconnexion
 }
@@ -1507,11 +1573,11 @@ void onMqttConnect(bool sessionPresent)
 
   // On crée les informations pour le Discovery HomeAssistant
   // On crée un identifiant unique
-  String deviceID = "maxpv";
+  String deviceID = F("maxpv");
   deviceID += ESP.getChipId();
 
   // On récupère l'URL d'accès
-  String ip_url = "http://" + WiFi.localIP().toString();
+  String ip_url = F("http://") + WiFi.localIP().toString();
 
   // On crée les templates du topic et du Payload
   String configTopicTemplate = String(F("homeassistant/#COMPONENT#/#DEVICEID#/#DEVICEID##SENSORID#/config"));
@@ -1557,7 +1623,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#SENSORNAME#"), F("Tension"));
   payload.replace(F("#CLASS#"), F("voltage"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_V_RMS));
-  payload.replace(F("#UNIT#"), "V");
+  payload.replace(F("#UNIT#"), F("V"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // I_RMS
@@ -1571,7 +1637,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#DEVICECLASS#"), F("current"));
   payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_I_RMS));
-  payload.replace(F("#UNIT#"), "A");
+  payload.replace(F("#UNIT#"), F("A"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // P_APP
@@ -1585,7 +1651,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#DEVICECLASS#"), F("apparent_power"));
   payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_APP));
-  payload.replace(F("#UNIT#"), "VA");
+  payload.replace(F("#UNIT#"), F("VA"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_COS_PHI
@@ -1612,7 +1678,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#SENSORNAME#"), F("Import_P"));
    payload.replace(F("#DEVICECLASS#"), F("power"));
   payload.replace(F("#STATECLASS#"), F("measurement"));  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
-  payload.replace(F("#UNIT#"), "W");
+  payload.replace(F("#UNIT#"), F("W"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
  // MQTT_P_EXPORT
@@ -1625,7 +1691,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#SENSORNAME#"), F("Export_P"));
   payload.replace(F("#CLASS#"), F("power"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_EXPORT));
-  payload.replace(F("#UNIT#"), "W");
+  payload.replace(F("#UNIT#"), F("W"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_P_ROUTED
@@ -1639,7 +1705,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#DEVICECLASS#"), F("power"));
   payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_ROUTED));
-  payload.replace(F("#UNIT#"), "W");
+  payload.replace(F("#UNIT#"), F("W"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
   
   // MQTT_P_IMPULSION
@@ -1653,7 +1719,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#DEVICECLASS#"), F("power"));
   payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_IMPULSION));
-  payload.replace(F("#UNIT#"), "W");
+  payload.replace(F("#UNIT#"), F("W"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_INDEX_ROUTED
@@ -1667,7 +1733,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#DEVICECLASS#"), F("energy"));
   payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_ROUTED));
-  payload.replace(F("#UNIT#"), "KWh");
+  payload.replace(F("#UNIT#"), F("KWh"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_INDEX_IMPORT
@@ -1681,7 +1747,7 @@ void onMqttConnect(bool sessionPresent)
  payload.replace(F("#DEVICECLASS#"), F("energy"));
   payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPORT));
-  payload.replace(F("#UNIT#"), "kWh");
+  payload.replace(F("#UNIT#"), F("kWh"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
   
   // MQTT_INDEX_EXPORT
@@ -1695,7 +1761,7 @@ void onMqttConnect(bool sessionPresent)
    payload.replace(F("#DEVICECLASS#"), F("energy"));
   payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_EXPORT));
-  payload.replace(F("#UNIT#"), "kWh");
+  payload.replace(F("#UNIT#"), F("kWh"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
   
   // MQTT_INDEX_IMPULSION
@@ -1709,7 +1775,7 @@ void onMqttConnect(bool sessionPresent)
    payload.replace(F("#DEVICECLASS#"), F("energy"));
   payload.replace(F("#STATECLASS#"), F("total_increasing"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_INDEX_IMPULSION));
-  payload.replace(F("#UNIT#"), "kWh");
+  payload.replace(F("#UNIT#"), F("kWh"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_TEMP
@@ -1723,7 +1789,7 @@ void onMqttConnect(bool sessionPresent)
    payload.replace(F("#DEVICECLASS#"), F("temperature"));
   payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_TEMP));
-  payload.replace(F("#UNIT#"), "°C");
+  payload.replace(F("#UNIT#"), F("°C"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_TRIAC_MODE
@@ -1758,6 +1824,23 @@ void onMqttConnect(bool sessionPresent)
                   F("\"cmd_t\":\"#CMDTOPIC#\","
                     "\"options\":[\"stop\",\"force\",\"auto\"]"));
   payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_RELAY_MODE));
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+ // MQTT_DIMMER_MODE
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("select"));
+  topic.replace(F("#SENSORID#"), F("Dimmer HTTP"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Dimmer HTTP"));
+  payload.replace(F("#SENSORNAME#"), F("Dimmer HTTP"));
+  payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+  payload.replace(F("#STATECLASS#"), F(""));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_DIMMER_MODE));
+  payload.replace(F("\"unit_of_meas\":\"#UNIT#\""),
+                  F("\"cmd_t\":\"#CMDTOPIC#\","
+                    "\"options\":[\"stop\",\"force\",\"auto\"]"));
+  payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_DIMMER_MODE));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_BOOST_MODE
@@ -1826,22 +1909,20 @@ void relais_http (void)
     }
   }
 }
+
 //appel HTTP
 short appel_http (String url)
 {
   WiFiClient client;
   HTTPClient http;
-  tcpClient.print(F("Tentative appel HTTP code:"));
+  tcpClient.print(F("Appel HTTP code:"));
+  //tcpClient.print(url);
   if (http.begin(client, url))
   { // HTTP
     int httpCode = http.GET();
     tcpClient.println(httpCode);
-    if (httpCode != 200) {
-      return -1;
-    }
-    else {
-      return 1;
-    }
+    if (httpCode != 200) return -1;
+    else return 1;
     http.end();
   }
   else
@@ -1849,4 +1930,136 @@ short appel_http (String url)
     tcpClient.print(-1);
     return -1;
   }
+}
+
+//gestion du Dimmer secondaire
+short dimmer_engine() {
+int  maxpow = ecoPVConfig[P_INSTALLPV].toInt(); // puiss. max à envoyer selon installation
+// si failsafe, retentative ?
+//Ping dimmer
+if ( (dimmer_m != OFF ) && (dimmer_count >= DIMMER_CHECK)) {
+  dimmer_count=0;
+  tcpClient.print(F("Tentative ping Dimmer"));
+  String url = F("http://") + dimmer_ip2 + F(DIMMER_URL_STATE);
+  if ( appel_http(url) != 1 ) 
+        dimmer_failsafe( );
+        return -1;
+        }
+else dimmer_count++;
+
+if ( ( dimmer_m == OFF ) && (dimmer_act == ON))
+  {
+  tcpClient.print(F("Tentative Dimmer OFF"));
+  String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + F("0");
+  if ( appel_http(url) == 1 ) {dimmer_act = OFF;dimmer_count = 0;dimmer_pow=0;}
+  }
+if ( ( dimmer_m == FORCE ) && (dimmer_pow < dimmer_sumpow))
+  {
+  tcpClient.print(F("Tentative Dimmer FORCE"));
+  String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + dimmer_sumpourcent;
+  if ( appel_http(url) == 1 ) {dimmer_act = ON;dimmer_count = 0;dimmer_pow = dimmer_sumpow;}
+  }
+//routage ssi ecopv ne route plus. Ecopv reste prioritaire
+if ( dimmer_m == AUTOM && ecoPVStats[P_ROUTED].toInt() > 0)
+  {
+   tcpClient.print(F("Tentative Dimmer OFF"));
+   String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + F("0");
+  if ( appel_http(url) == 1 ) {dimmer_act = OFF;dimmer_count = 0;dimmer_pow=0;}
+  }  
+if ( dimmer_m == AUTOM && ecoPVStats[P_ROUTED].toInt() == 0)
+  {
+   //if  (ecoPVStats[TRIAC_MODE].toInt() == STOP) || (ecoPVStats[TRIAC_MODE].toInt() == AUTOM)
+   //{
+    int curpower = ecoPVStats[P_ACT].toInt();
+    int margin =  ecoPVStats[P_MARGIN].toInt();
+    int dpow = 0;
+    short oldp = pow_to_pourcent( dimmer_pow );
+    short newp = 0;
+    
+    // Injection et adaptation % dimmer
+    if ( curpower < 0 ) //si 0???
+      {
+      // calcul power et %
+      if ((curpower*-1)  > margin )
+         dpow = min((dimmer_pow + curpower*-1 - margin), (maxpow - margin));
+      else dpow = 0;
+      //calcul en %
+      newp = pow_to_pourcent( dpow );
+      String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + newp;
+      if ( (abs (oldp - newp) >= DIMMER_POW_HYSTERESIS) && (appel_http(url) == 1 )) 
+        {
+          dimmer_pow = dpow;
+          dimmer_act = ON; 
+          dimmer_count=0;
+          tcpClient.println(F("Augmentation Dimmer"));      
+        }
+      }
+    // consommation et adaptation % reduction dimmer 
+    else if ( (curpower >= 0 )  && (curpower  > margin) && (dimmer_pow > 0) )
+      {
+      //reduction calcul power
+      dpow =  max ( (dimmer_pow - (curpower - margin)), 0 );
+      //calcul en %
+      newp = pow_to_pourcent( dpow );
+      String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + newp;
+      if ( (abs (oldp - newp) >= DIMMER_POW_HYSTERESIS) && appel_http(url) == 1 ) {
+	       if (dpow > 0)  dimmer_act = ON;
+	       else  dimmer_act = OFF;
+         dimmer_pow = dpow;
+         dimmer_count=0;
+         tcpClient.println(F("Reduction Dimmer"));       
+       }
+       }
+    // calcul stat
+    // fait dans MQTT avec dimmer_pow;  
+   }
+//}
+return 1;
+}//end dimmer_engine()
+
+
+//dimmer init
+void dimmer_init( )
+{
+  dimmer_act = OFF ;
+  dimmer_pow = 0;
+  int n = 1;
+  //mdns si necessaire
+  if ( dimmer_ip[0] != '1' )
+  {
+    n = MDNS.queryService("http", "tcp");
+    if ( n > 0 ) {
+      for (int i = 0; i < n; ++i) {
+      if(strcmp(MDNS.hostname(i).c_str(), dimmer_ip) == 0)
+           dimmer_ip2 = MDNS.IP(i).toString();
+       
+    }
+  }
+  }
+  else dimmer_ip2 = String (dimmer_ip);
+  
+  String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + F("0");
+  if (( n > 0 ) && ( appel_http(url) == 1 )){
+    tcpClient.println(F("Dimmer Init"));
+    dimmer_count=0;
+  }
+  else {
+   dimmer_failsafe( );
+  }
+}
+
+//dimmer failsafe
+void dimmer_failsafe( )
+{
+  dimmer_m = OFF;
+  dimmer_act = OFF ;
+  dimmer_pow = 0;
+  tcpClient.println(F("Dimmer absent : failsafe"));
+}
+
+//calcul % à envoyer au dimmer à partir de puissance
+int pow_to_pourcent( int power )
+{
+if ( power > 30 ) return ( power*dimmer_sumpourcent/dimmer_sumpow );
+else return 1; 
 }
