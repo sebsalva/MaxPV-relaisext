@@ -1,4 +1,4 @@
-# Fork de MaxPV (temérature, mDNS, heure été/hiver, gestion d'un second routeur HTTP)
+# Fork de MaxPV (température, mDNS, heure été/hiver, gestion d'un second routeur HTTP)
 Fork du Routeur Solaire MaxPV, basé sur la version 3.35.
 
 **Attention, version en cours de test. Certaines parties necessitent d'avantage de tests.**
