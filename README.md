@@ -1,4 +1,4 @@
-# Fork de MaxPV
+# Fork de MaxPV (temérature, mDNS, heure été/hiver, gestion d'un second routeur HTTP)
 Fork du Routeur Solaire MaxPV, basé sur la version 3.35.
 
 **Attention, version en cours de test. Certaines parties necessitent d'avantage de tests.**
@@ -21,6 +21,7 @@ Les modifications apportées sont les suivantes :
   * Quand le routeur principal (EcoPv) ne route plus, le routeur HTTP prend la main. Il route vers des Dimmer HTTP en cascade (Idée originale de ce prototype https://github.com/xlyric/pv-router-esp32).
   * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn
   * Dans le code actuel, le routeur principal (Ecopv) est prioritaire
+  * Le second routeur HTTP est en cours de test
 
 
 # MaxPV
