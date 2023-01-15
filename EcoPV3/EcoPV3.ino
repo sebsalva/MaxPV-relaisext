@@ -448,7 +448,7 @@ SSD1306AsciiAvrI2c oled;
 #define Dallas_REFRESH_PERIOD 10
 #include "OneWire.h"
 #include "DallasTemperature.h"
-#define tempPin                10   // OUT DIGITAL = PIN D10, Température Dallas DS18B20
+#define tempPin                9   // OUT DIGITAL = PIN D09, Température Dallas DS18B20
 OneWire oneWire(tempPin);
 DallasTemperature ds(&oneWire);
 short previous_t = -1;
