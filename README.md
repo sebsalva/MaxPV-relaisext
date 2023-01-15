@@ -1,7 +1,7 @@
 # Fork de MaxPV
 Fork du Routeur Solaire MaxPV, basé sur la version 3.35.
 
-**Attention, version testée sur prototype. Le code necessite d'avantage de tests.**
+**Attention, version en cours de test. Certaines parties necessitent d'avantage de tests.**
 
 Les modifications apportées sont les suivantes :
 
@@ -10,13 +10,17 @@ Les modifications apportées sont les suivantes :
 * Modification de la gestion MQTT auto-discovery pour fonctionner avec le plugin MQTT auto-discovery de domoticz
 * Capteur de température DALLAS DS18b20, lecture et calibration. Affichage sur l'interface Web et sous MQTT 
 * Utilisation du Capteur de température pour :
-  * Donner un Seuil de température à ne pas dépasser dans page Administration
+  * Donner un Seuil de température à ne pas dépasser dans page Configuration Web
   * Stopper mode Boost si température >= seuil + hyteresis
   * Stopper Relais SSR si température >= seuil + hyteresis
   * Authoriser Allumage Relais SSR si température <= seuil + hyteresis
 * Modification du Client NTP. Le nouveau client gere l'heure d'été / d'hiver
 * Ajout Multicast DNS (mDNS). Permet d'appeler le routeur avec http://maxpv.local/
   * Plus besoin de mettre une adresse IP fixe. A la place, le mot any (pour adresse IP, Passerelle, DNS) peut être utilisé dans la page Administration
+* Ajout Gestion second Routeur HTTP qui permet de gérer une chaine de Dimmer. Cette version combine donc 2 routeurs :
+  * Quand le routeur principal (EcoPv) ne route plus, le routeur HTTP prend la main. Il route vers des Dimmer HTTP en cascade (Idée originale de ce prototype https://github.com/xlyric/pv-router-esp32).
+  * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn
+  * Dans le code actuel, le routeur principal (Ecopv) est prioritaire
 
 
 # MaxPV
