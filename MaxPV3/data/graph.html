@@ -99,10 +99,10 @@
             <a class="nav-link" href="wizard.html">Assistant de configuration</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="configuration.html">Paramétrage avancé</a>
+            <a class="nav-link" href="configuration.html">Configuration Routeur</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="admin.html">Administration</a>
+            <a class="nav-link" href="admin.html">Configuration Web</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="maj.html">Update</a>
@@ -130,6 +130,11 @@
                 <span class="badge rounded-pill text-bg-warning" id="relaystate">Relais : ----</span>
               </h4>
             </td>
+            <td scope="col">
+                          <h4>
+                            <span class="badge rounded-pill text-bg-warning" id="dimmerstate">Dimmer : ----</span>
+                          </h4>
+                        </td>
           </tr>
         </tbody>
       </table>
@@ -915,6 +920,7 @@
       var xhttp2 = new XMLHttpRequest();
       var xhttp3 = new XMLHttpRequest();
       var xhttp5 = new XMLHttpRequest();
+      var xhttp6 = new XMLHttpRequest();
 
       xhttp2.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
@@ -935,6 +941,16 @@
       };
       xhttp3.open("GET", "api/get?relaystate", true);
       xhttp3.send();
+
+      xhttp6.onreadystatechange = function () {
+        if (this.readyState == 4 && this.status == 200) {
+          var result = this.responseText;
+          result = "Dimmer : " + result;
+          document.getElementById("dimmerstate").innerHTML = result;
+        }
+      };
+      xhttp6.open("GET", "api/get?dimmerstate", true);
+      xhttp6.send();
 
       xhttp5.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {

@@ -35,10 +35,10 @@
             <a class="nav-link" href="wizard.html">Assistant de configuration</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="configuration.html">Paramétrage avancé</a>
+            <a class="nav-link" href="configuration.html">Configuration Routeur</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="admin.html">Administration</a>
+            <a class="nav-link" href="admin.html">Configuration Web</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="maj.html">Update</a>
@@ -70,6 +70,11 @@
                 <span class="badge rounded-pill text-bg-warning" id="relaystate">Relais : ----</span>
               </h4>
             </td>
+            <td scope="col">
+                          <h4>
+                            <span class="badge rounded-pill text-bg-warning" id="dimmerstate">Dimmer : ----</span>
+                          </h4>
+                        </td>
           </tr>
           <tr>
             <td>
@@ -118,6 +123,29 @@
                 </label>
               </div>
             </td>
+            <td>
+                          <div class="form-check-reverse text-center">
+                            <input class="form-check-input" type="radio" name="dimmermode" id="dimmerforce"
+                              onclick="sendMode (name, this)">
+                            <label class="form-check-label" for="dimmerforce">
+                              FORCE
+                            </label>
+                          </div>
+                          <div class="form-check-reverse text-center">
+                            <input class="form-check-input" type="radio" name="dimmermode" id="dimmerauto"
+                              onclick="sendMode (name, this)">
+                            <label class="form-check-label" for="dimmerauto">
+                              AUTO
+                            </label>
+                          </div>
+                          <div class="form-check-reverse text-center">
+                            <input class="form-check-input" type="radio" name="dimmermode" id="dimmerstop"
+                              onclick="sendMode (name, this)">
+                            <label class="form-check-label" for="dimmerstop">
+                              STOP
+                            </label>
+                          </div>
+                        </td>
           </tr>
         </tbody>
       </table>
@@ -303,6 +331,7 @@
       var xhttp3 = new XMLHttpRequest();
       var xhttp4 = new XMLHttpRequest();
       var xhttp5 = new XMLHttpRequest();
+      var xhttp6 = new XMLHttpRequest();
 
       xhttp1.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
@@ -355,6 +384,16 @@
       xhttp3.open("GET", "api/get?relaystate", true);
       xhttp3.send();
 
+      xhttp6.onreadystatechange = function () {
+        if (this.readyState == 4 && this.status == 200) {
+          var result = this.responseText;
+          result = "Dimmer : " + result;
+          document.getElementById("dimmerstate").innerHTML = result;
+        }
+      };
+      xhttp6.open("GET", "api/get?dimmerstate", true);
+      xhttp6.send();
+      
       xhttp4.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
           var result = this.responseText;
@@ -388,7 +427,7 @@
       var args = "api/set?";
       args += name;
       args += "&value=";
-      args += ele.id.replace("relay", "").replace("ssr", "");
+      args += ele.id.replace("relay", "").replace("ssr", "").replace("dimmer", "");
       xhttp.open("GET", args, true);
       xhttp.send();
       ele.blur();
@@ -398,6 +437,7 @@
     function fillRadioMode() {
       var xhttp1 = new XMLHttpRequest();
       var xhttp2 = new XMLHttpRequest();
+      var xhttp3 = new XMLHttpRequest();
 
       xhttp1.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
@@ -420,6 +460,17 @@
       };
       xhttp2.open("GET", "api/get?relaystate", true);
       xhttp2.send();
+      
+      xhttp3.onreadystatechange = function () {
+              if (this.readyState == 4 && this.status == 200) {
+                var result = this.responseText;
+                if (result == "FORCE") document.getElementById("dimmerforce").checked = true;
+                else if (result == "STOP") document.getElementById("dimmerstop").checked = true;
+                else document.getElementById("dimmerauto").checked = true;
+              }
+            };
+            xhttp3.open("GET", "api/get?dimmerstate", true);
+            xhttp3.send();
     }
 
     function sendAction(action, ele) {

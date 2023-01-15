@@ -54,3 +54,48 @@ body {
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
 }
+
+@media (prefers-color-scheme: dark) {
+    
+body,
+.accordion-body,
+.highcharts-background,
+.accordion-button,
+.bg-light,
+.table-hover,
+td,
+.highcharts-contextmenu > ul {
+    background-color: #161618 !important;
+    color: #ffffff;
+    fill:#161618;
+    --bs-accordion-inner-border-radius:0;
+}
+
+.highcharts-contextmenu > ul > li {
+    color: #ffffff !important;
+}
+    
+.highcharts-title,
+.highcharts-yaxis > text,
+.highcharts-color-undefined > text,
+.highcharts-axis-labels > text, 
+.highcharts-caption,
+.highcharts-radial-axis-labels > text,
+.highcharts-tracker > div > span > div {
+    fill: #ffffff !important;
+    color: #ffffff;
+}
+
+ .highcharts-tooltip-box {
+    fill: #000000;
+}
+    
+.highcharts-legend-item > text:hover,
+.highcharts-legend-item-hidden > text:hover {
+    fill: #000000 !important; 
+}
+    
+.highcharts-legend-item-hidden > text {
+    fill: #818181 !important;
+}
+}
