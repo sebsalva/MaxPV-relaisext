@@ -3,8 +3,8 @@
   by monitoring energy consumption and diverting power to a resistive charge
   when needed.
   Copyright (C) 2019 - Bernard Legrand and Mickaël Lefebvre.
-  Copyright (C) 2022 - Bernard Legrand.
-
+  Copyright (C) 2023 - Bernard Legrand.
+  maxpv@bernard-legrand.net
   https://github.com/Jetblack31/EcoPV
   https://github.com/Jetblack31/MaxPV
 
@@ -56,6 +56,21 @@
 // *** Note : ne pas oublier de placer un résistance de pull-up de 10 kohms
 // *** sur les lignes SDA et SCK
 
+
+// ***********************************************************************************
+// ****************** Configuration de l'accumulation                  ***************
+// ****************** de l'énergie routée                              ***************
+// ***********************************************************************************
+
+#define ACC_FORCE_ENERGY    false
+
+// *** ACC_FORCE_ENERGY peut être true ou false 
+//     false : le compteur d'énergie routée accumule uniquement l'énergie routée en cas
+//     de surplus de production PV
+//     true : le compteur d'énergie routée accumule l'énergie délivrée par le SSR
+//     en cas de routage d'excédent PV, en mode FORCE et en mode BOOST
+
+
 // ***********************************************************************************
 // ******************        FIN DES OPTIONS DE COMPILATION            ***************
 // ***********************************************************************************
@@ -69,7 +84,7 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define VERSION            "3.322"      // Version logicielle
+#define VERSION          "3.512"       // Version logicielle
 #define SERIAL_BAUD      500000       // Vitesse de la liaison port série
 #define SERIALTIMEOUT       100       // Timeout pour les interrogations sur liaison série en ms
 
@@ -79,6 +94,7 @@
 // Dépend de la configuration de l'ADC dans le programme
 #define WH_PER_INC            5       // Nombre de Wh par incrément pour le stockage 3 compteurs d'énergie (Rout, Imp, Exp)
 
+#define BOOST_BURST_PERIOD  300       // Durée de la période du cycle PWM mode BOOST en secondes
 
 // ***********************************************************************************
 // ***************************   Définitions utilitaires   ***************************
@@ -115,7 +131,6 @@
 #define ledPinStatus           6    // OUT DIGITAL = PIN D6, LED de signalisation fonctionnement / erreur
 #define ledPinRouting          7    // OUT DIGITAL = PIN D7, LED de signalisation routage de puissance
 #define relayPin               8    // OUT DIGITAL = PIN D8, commande On/Off du relais de délestage secondaire
-
 
 //                   **************************************************
 //                   **********   A  T  T  E  N  T  I  O  N   *********
@@ -192,10 +207,10 @@ byte   A_DIV2_EXT   = 	    0;	       //module relais ext
 // P_DIV2_ACTIVE + P_DIV2_IDLE > à la puissance de la charge de délestage secondaire
 
 // ************* Calibration du compteur à impulsion | conversion nombre de Wh par impulsion (valeur par défaut)
-float CNT_CALIB     =       1.0;         // En Wh par impulsion externe
+float CNT_CALIB     =       1.0;       // En Wh par impulsion externe
 
 // ************* Puissance de l'installation PV (valeurs par défaut)
-int   P_INSTALLPV   =     3000;          // Valeur en Wc de la puissance de l'installation PV | production max (valeur par défaut)
+int   P_INSTALLPV   =    3000;         // Valeur en Wc de la puissance de l'installation PV | production max (valeur par défaut)
 
 // ************* Etats SSR et Relais (valeurs par défaut)
 byte   S_SSR         =     AUTOM;         // sauvegarde etat Automatique par défaut
@@ -349,6 +364,7 @@ long                   indexRouted      = 0;        // compteur d'énergie en in
 long                   indexImported    = 0;        // compteur d'énergie en incrément
 long                   indexExported    = 0;        // compteur d'énergie en incrément
 long                   indexImpulsion   = 0;        // compteur d'impulsions externes
+long                   indexRelayOn     = 0;        // compteur de temps de fonctionnement du relais en minutes
 volatile unsigned long deltaTimeImpulsion = 0;      // temps entre 2 impulsions externes
 
 float                  Prouted          = 0;        // puissance routée en Watts
@@ -376,6 +392,22 @@ byte                   ledBlink         = 0;        // séquenceur de clignoteme
 
 byte                   triacMode        = AUTOM;    // mode de fonctionnement du triac/SSR
 byte                   relayMode        = AUTOM;    // mode de fonctionnement du relais secondaire de délestage
+
+bool                   hasRestarted     = false;    // flag indiquant que le routeur a redémarré                
+
+// ***********************************************************************************
+// ************* Variables pour la gestion du mode BOOST                 *************
+// ***********************************************************************************
+
+long                   boostTime = -1;         // Temps restant pour le mode BOOST, en secondes (-1 = arrêt)
+int                    burstCnt  = 0;          // Compteur de la PWM software pour la gestion du mode BOOST entre 0 et BOOST_BURST_PERIOD
+int                    burstThreshold  = 10;   // Instant de mise en route SSR dans la période burst pour le mode BOOST entre 0 et BOOST_BURST_PERIOD
+
+// ***********************************************************************************
+// ************* Variables pour la gestion du relais en mode Timer       *************
+// ***********************************************************************************
+
+long                   relayplusTime = -1;     // Temps restant pour le mode relay+, en secondes (-1 = arrêt)
 
 // ***********************************************************************************
 // ********  Définitions pour manipuler les données en EEPROM               **********
@@ -420,7 +452,8 @@ struct indexEeprom {
   long                  imported;
   long                  exported;
   long                  impulsion;
-  // taille totale : 16 bytes
+  long                  relayon;
+  // taille totale : 20 bytes
 };
 
 // ***********************************************************************************
@@ -433,11 +466,10 @@ struct indexEeprom {
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiAvrI2c.h"
 
-#define I2C_ADDRESS 0x3C                    // adresse I2C de l'écran oled
-#define OLED_128X64_REFRESH_PERIOD  6       // période de raffraichissement des données à l'écran en secondes
+#define I2C_ADDRESS                   0x3C       // adresse I2C de l'écran oled
+#define OLED_128X64_REFRESH_PERIOD       6       // période de raffraichissement des données à l'écran en secondes
 
-SSD1306AsciiAvrI2c oled;
-
+SSD1306AsciiAvrI2c      oled;
 #endif
 // ***********************************************************************************
 // ****************** Définitions pour la temperature                  ***************
@@ -506,12 +538,7 @@ void setup ( ) {
 #if defined (OLED_128X64)
   oled.begin( &Adafruit128x64, I2C_ADDRESS );
   oled.setFont ( System5x7 );
-  oled.clear ( );
-  oled.set2X ( );
-  oled.print ( F("MaxPV V") );
-  oled.println ( F(VERSION) );
-  oled.println ( );
-  oled.println ( F("Starting...") );
+  oLedPrint ( 9 );
 #endif
 
 #if defined (Dallas)
@@ -534,12 +561,7 @@ ds.begin();
   startPVR ( );
 
 #if defined (OLED_128X64)
-  oled.clear ( );
-  oled.set2X ( );
-  oled.print ( F("MaxPV V") );
-  oled.println ( F(VERSION) );
-  oled.println ( );
-  oled.println ( F("Running !") );
+  oLedPrint ( 10 );
 #endif
 }
 
@@ -556,6 +578,7 @@ void loop ( ) {
   static float         routedEnergy   = ( -3600.0 * WH_PER_INC ); // initialisation à valeur négative
   static float         exportedEnergy = ( -3600.0 * WH_PER_INC ); // Ca permet ensuite de faire la comparaison
   static float         importedEnergy = ( -3600.0 * WH_PER_INC ); // au passage à 0
+  static int           relayOnSeconds = -60;
 
   static float         inv_NB_CYCLES  = 1 / float ( NB_CYCLES );
   static float         inv_255        = 1 / float ( 255 );
@@ -646,9 +669,17 @@ void loop ( ) {
 
     // *** Calcul des valeurs filtrées de Pact et Prouted                 ***
     // *** Usage : déclenchement du relais secondaire de délestage        ***
-    Filter_param = 1 / float ( 1 + ( int ( T_DIV2_TC ) * 60 ) );
-    Pact_filtered = Pact_filtered + Filter_param * ( Pact - Pact_filtered );
-    Prouted_filtered = Prouted_filtered + Filter_param * ( Prouted - Prouted_filtered );
+    // *** Uniquement en mode Triac AUTO                                  ***
+    // *** Pour éviter le déclenchement du relais en mode Triac FORCE     ***
+    if ( triacMode == AUTOM ) {
+      Filter_param = 1 / float ( 1 + ( int ( T_DIV2_TC ) * 60 ) );
+      Pact_filtered = Pact_filtered + Filter_param * ( Pact - Pact_filtered );
+      Prouted_filtered = Prouted_filtered + Filter_param * ( Prouted - Prouted_filtered );
+    }
+    else {
+      Pact_filtered = 0;
+      Prouted_filtered = 0;
+    }
 
     // *** Déclenchement et gestion du relais secondaire de délestage     ***
     if ( ( relayMode == AUTOM ) && ( triacMode == AUTOM ) ) {
@@ -682,10 +713,11 @@ void loop ( ) {
     }                                                                 // le relais ne peut être activé (OFF)
 
     // *** Vérification de l'état du relais de délestage                  ***
-    if ( A_DIV2_EXT == 0 && digitalRead ( relayPin ) == ON )
+    if ( A_DIV2_EXT == 0 && digitalRead ( relayPin ) == ON ) {
       stats_error_status |= B00000100;
-    else
-      stats_error_status &= B11111011;
+      relayOnSeconds++;
+    }
+    else stats_error_status &= B11111011;
 
 
     // *** Correction de l'artefact de puissance routée maximale          ***
@@ -701,7 +733,7 @@ void loop ( ) {
     // *** Accumulation des énergies routée, importée, exportée           ***
     // *** Les calculs sont faits toutes les secondes                     ***
     // *** La puissance x 1s = énergie en Joule                           ***
-    routedEnergy += Prouted;
+    if ( ( ACC_FORCE_ENERGY ) || ( triacMode == AUTOM ) ) routedEnergy += Prouted;
     if ( Pact < 0 )     exportedEnergy -= Pact;
     else                importedEnergy += Pact;
 
@@ -717,6 +749,11 @@ void loop ( ) {
       importedEnergy -= ( 3600.0 * WH_PER_INC );
       indexImported ++;
     }
+    if ( relayOnSeconds >= 0 ) {
+      relayOnSeconds -= 60;
+      indexRelayOn ++;
+    }
+    
 
     // *** Calcul des statistiques du déclenchement du TRIAC              ***
     OCR1A_avg /= OCR1A_cnt;
@@ -761,7 +798,8 @@ void loop ( ) {
     Serial.print ( F(",") );
     Serial.print ( relayMode );
     Serial.print ( F(",") );
-    if ( OCR1A_min < 255 ) {
+    if ( ( OCR1A_min < 255 ) && ( triacMode == AUTOM ) ) {   
+      // Affichage si on est en mode SSR automatique et régime de régulation (exécent PV)
       Serial.print ( float ( OCR1A_min * 0.064 ), 2 );
       Serial.print ( F(",") );
       Serial.print ( float ( OCR1A_avg * 0.064 ), 2 );
@@ -797,8 +835,11 @@ void loop ( ) {
     Serial.print ( F(",") );
     Serial.print ( stats_samples );
     Serial.print ( F(",") );
+    Serial.print ( indexRelayOn );
+    Serial.print ( F(",") );
     Serial.print ( temp );
     Serial.print ( F(",END#") );
+
     // *** Reset du Flag pour indiquer que les données ont été traitées   ***
     stats_ready_flag = 0;
 
@@ -824,6 +865,8 @@ void loop ( ) {
   // *** Mise à jour de l'état des LEDs de signalisation                  ***
   PVRLed ( );
 
+  hasRestarted = false;
+
   // *** Traitement des requêtes par liaison série                        ***
   // *** On fait 5 traitements de suite au cas où il y a une salve        ***
   // *** de données communiquées                                          ***
@@ -833,11 +876,12 @@ void loop ( ) {
   }
 
   // *** Traitement de la perte longue de synchronisation, erreur majeure ***
-  if ( stats_error_status >= B10000000 ) {
-    fatalError ( );
-    clearSerialInputCache ( );    // à voir si nécessaire
+  if ( stats_error_status >= B10000000 ) fatalError ( );
+
+  if ( hasRestarted ) {
+    clearSerialInputCache ( );
     refTime = millis ( );
-  };
+  }
 
 }
 
@@ -893,6 +937,7 @@ void startPVR ( void ) {
   while ( coldStart > 0 ) {
     delay ( 10 );
   };
+  hasRestarted = true;
 }
 
 
@@ -925,7 +970,9 @@ void serialRequest ( void ) {
 
   // Les chaînes valides envoyées par l'ESP se terminent toujours par #
   // !! envoyer les châines avec un Serial.print et non pas un Serialprintln !
-  String incomingCommand = Serial.readStringUntil ( '#' );
+  String incomingCommand;
+  incomingCommand.reserve(32);
+  incomingCommand = Serial.readStringUntil ( '#' );
   incomingCommand.trim();
   // On teste la validité de la chaîne qui doit contenir 'END' à la fin
   if ( incomingCommand.endsWith ( F("END") ) ) {
@@ -1022,7 +1069,7 @@ void serialRequest ( void ) {
       incomingCommand.replace ( F("SETPARAM,"), "" );
       incomingCommand.replace ( F(",END"), "" );
 
-      int paramNum = incomingCommand.substring ( 0, 2 ).toInt();
+      int paramNum = incomingCommand.substring ( 0, 2 ).toInt ( );
 
       if ( ( paramNum > 0) && ( paramNum <= NB_PARAM ) ) {
         int index = paramNum - 1;
@@ -1075,6 +1122,12 @@ void serialRequest ( void ) {
       if ( incomingCommand == F("STOP") )       relayMode = STOP;
       else if ( incomingCommand == F("FORCE") ) relayMode = FORCE;
       else if ( incomingCommand == F("AUTO") )  relayMode = AUTOM;
+      // Arrêt du mode relayPlus si il est en cours pour donner la priorité 
+      // au changement de mode relais
+      if ( relayplusTime >= 0 ) {
+          relayplusTime = -1;
+          Serial.print ( F("RELAYPLUSTIME,-1,END") );
+      }
       Serial.print ( F("DONE:SETRELAY,OK,") );
       //sauvegarde etat
       byte *tmp = (byte *) pvrParamConfig [18].adr;
@@ -1093,11 +1146,54 @@ void serialRequest ( void ) {
       if ( incomingCommand == F("STOP") )       triacMode = STOP;
       else if ( incomingCommand == F("FORCE") ) triacMode = FORCE;
       else if ( incomingCommand == F("AUTO") )  triacMode = AUTOM;
+      // Arrêt du mode BOOST si il est en cours pour donner la priorité 
+      // au changement de mode SSR
+      if ( boostTime >= 0 ) {
+          boostTime = -1;
+          Serial.print ( F("BOOSTTIME,-1,END") );
+      }
       Serial.print ( F("DONE:SETSSR,OK,") );
       //sauvegarde etat
-      byte *tmp2 = (byte *) pvrParamConfig [17].adr;
+      byte *tmp = (byte *) pvrParamConfig [18].adr;
       noInterrupts ( );
-      *tmp2 =  triacMode ;
+      *tmp = relayMode ;
+      eeConfigWrite ( );
+      interrupts ( );
+      Serial.print ( F("DONE:SAVECFG,OK,") );
+    }
+
+    else if ( incomingCommand.startsWith ( F("SETBOOST") ) ) {
+      int index = 0;
+      long bT = 0;
+      int burstRatio = 100;  // rapport PWM par défaut : 100%
+
+      incomingCommand.replace ( F("SETBOOST,"), "" );
+      incomingCommand.replace ( F(",END"), "" );
+
+      bT = incomingCommand.toInt ( );
+      bT = constrain ( bT, 0, 86400 );
+      if ( ( bT != 0 ) || ( boostTime != -1 ) ) boostTime = bT;
+      index = incomingCommand.indexOf(',');
+      if ( index != -1 ) burstRatio = incomingCommand.substring ( index + 1 ).toInt ( );
+      burstRatio = constrain ( burstRatio, 10, 100 );
+      burstThreshold = int ( ( long ( BOOST_BURST_PERIOD ) * long ( burstRatio ) ) / 100 );
+      burstCnt = 0; // reset du cycle de la PWM burst
+      Serial.print ( F("DONE:SETBOOST,OK,") );
+    }
+
+    else if ( incomingCommand.startsWith ( F("SETRELAY+") ) ) {
+      long rT = 0;
+
+      incomingCommand.replace ( F("SETRELAY+,"), "" );
+      incomingCommand.replace ( F(",END"), "" );
+
+      rT = incomingCommand.toInt ( );
+      relayplusTime = constrain ( rT, 0, 86400 );
+      Serial.print ( F("DONE:SETRELAY+,OK,") );
+      //sauvegarde etat
+      byte *tmp = (byte *) pvrParamConfig [18].adr;
+      noInterrupts ( );
+      *tmp = relayMode ;
       eeConfigWrite ( );
       interrupts ( );
       Serial.print ( F("DONE:SAVECFG,OK,") );
@@ -1122,15 +1218,10 @@ void fatalError ( void ) {
   // Sauvegarde des index par sécurité
 
 #if defined (OLED_128X64)
-  oled.clear ( );
-  oled.set2X ( );
-  oled.println ( F("***********") );
-  oled.println ( F("* ANOMALIE*") );
-  oled.println ( F("* MAJEURE *") );
-  oled.println ( F("***********") );
+  oLedPrint ( 99 );
 #endif
 
-  for ( int k = 0; k <= 300; k++ ) {
+  for ( int k = 0; k <= 100; k++ ) {
     digitalWrite ( pulseTriacPin, OFF ); //arrêt du SSR par sécurité
     digitalWrite ( ledPinStatus,  OFF );
     digitalWrite ( ledPinRouting, ON );
@@ -1139,7 +1230,7 @@ void fatalError ( void ) {
     digitalWrite ( ledPinRouting, OFF );
     delay ( 100 );
   }
-  // le système redémarre au bout d'une minute environ
+  // le système redémarre au bout de 20 secondes environ
   startPVR ( );
 }
 
@@ -1216,6 +1307,7 @@ void eeConfigWrite ( void ) {
   EEPROM.put ( PVR_EEPROM_START, pvrConfig );
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////////////
 // indexRead                                                                         //
 // Fonction de lecture des index en EEPROM                                           //
@@ -1227,6 +1319,7 @@ void indexRead ( void ) {
   indexRouted = indexTable.routed;
   indexImported = indexTable.imported;
   indexExported = indexTable.exported;
+  indexRelayOn = indexTable.relayon;
   noInterrupts ( );
   indexImpulsion = indexTable.impulsion;
   interrupts ( );
@@ -1243,6 +1336,7 @@ void indexWrite ( void ) {
   indexTable.routed = indexRouted;
   indexTable.imported = indexImported;
   indexTable.exported = indexExported;
+  indexTable.relayon = indexRelayOn; 
   noInterrupts ( );
   indexTable.impulsion = indexImpulsion;
   interrupts ( );
@@ -1273,7 +1367,7 @@ void upTime ( void ) {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // PVRScheduler                                                                      //
-// Fonction Scheduler                                                                //
+// Fonction Scheduler appelée chque seconde                                          //
 ///////////////////////////////////////////////////////////////////////////////////////
 void PVRScheduler ( void ) {
   static unsigned long  lastDeltaTimeImpulsion = 0;
@@ -1295,11 +1389,25 @@ void PVRScheduler ( void ) {
   }
 #endif
 
+  //*** Toutes les 30 secondes , envoi du temps BOOST restant                            ***
+  if ( ( secondsOnline % 30 )  == 17 ) {
+    Serial.print ( F("BOOSTTIME,") );
+    Serial.print ( boostTime );
+    Serial.print ( F(",END#") );
+  }
+
+  //*** Toutes les 30 secondes , envoi du temps relayPlus restant                        ***
+  if ( ( secondsOnline % 30 )  == 19 ) {
+    Serial.print ( F("RELAYPLUSTIME,") );
+    Serial.print ( relayplusTime );
+    Serial.print ( F(",END#") );
+  }
+
+
+
 #if defined (Dallas)
 if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
 #endif
-
-
 
   //*** Toutes les 2 secondes : Calcul de la puissance relative à la mesure d'impulsion  ***
   //*** Calcul en 'impulsion par heure'                                                  ***
@@ -1307,7 +1415,7 @@ if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
     noInterrupts ( );
     deltaTimeImpulsion_tmp = deltaTimeImpulsion;
     interrupts ( );
-    if ( secondsOnline == 8 ) {                     // une fois par minute, on teste l'absence d'impulsions
+    if ( secondsOnline == 8 ) {    // une fois par minute, on teste l'absence d'impulsions
       if ( deltaTimeImpulsion_tmp == lastMinuteDeltaTimeImpulsion ) {
         Pimpulsion = 0;
         impulsionFlag = false;
@@ -1319,6 +1427,33 @@ if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
       if ( impulsionFlag ) Pimpulsion = ( 3600000.0 / float ( deltaTimeImpulsion_tmp ) );
       else impulsionFlag = true;
     }
+  }
+
+  //*** Toutes les secondes : Traitement du mode BOOST
+  if (boostTime == 0) {
+    boostTime--;
+    triacMode = AUTOM;
+    // Envoi immédiat de la fin du mode Boost
+    Serial.print ( F("BOOSTTIME,-1,END") );
+  }
+  else if (boostTime > 0) {
+    if ( burstCnt <= burstThreshold ) triacMode = FORCE;
+    else triacMode = STOP;
+    boostTime--;
+    burstCnt++;
+    burstCnt %= BOOST_BURST_PERIOD;
+  }
+
+  //*** Toutes les secondes : Traitement du mode relayPlus
+  if (relayplusTime == 0) {
+    relayplusTime--;
+    relayMode = AUTOM;
+    // Envoi immédiat de la fin du mode relayPlus
+    Serial.print ( F("RELAYPLUSTIME,-1,END") );
+  }
+  else if (relayplusTime > 0) {
+    relayplusTime--;
+    relayMode = FORCE;
   }
 }
 
@@ -1443,8 +1578,33 @@ void oLedPrint ( int page ) {
         oled.print ( Irms, 1 );
         oled.println ( F(" Amps") );
         oled.print ( F(" ") );
-        oled.print ( abs ( cos_phi ), 1 );
-        oled.println ( F(" Cosfi") );
+        oled.print ( abs ( cos_phi ), 3 );
+        oled.println ( F(" PF ") );
+        break;
+      }
+
+    case 9 : {
+        oled.print ( F("MaxPV! ") );
+        oled.println ( F(VERSION) );
+        oled.println ( );
+        oled.println ( F(" Démarrage") );
+        oled.println ( F("en cours...") );
+        break;
+      }
+
+    case 10 : {
+        oled.print ( F("MaxPV! ") );
+        oled.println ( F(VERSION) );
+        oled.println ( );
+        oled.println ( F(" Démarré !") );
+        break;
+      }
+
+    case 99 : {
+        oled.println ( F("***********") );
+        oled.println ( F("* ANOMALIE*") );
+        oled.println ( F("* MAJEURE *") );
+        oled.println ( F("***********") );
         break;
       }
   }
@@ -1590,7 +1750,7 @@ void zeroCrossingInterrupt ( void ) {
   }
 
   else if ( ( present_time - last_time ) > 8000 ) {
-    // *** PASSAGE PAR ZERO - ON A TERMINE UNE DEMI PERIODE ***
+    // *** PASSAGE PAR ZERO DETECTE - ON A TERMINE UNE DEMI PERIODE ***
     // gestion de l'antirebond du passage à 0 en calculant de temps
     // entre 2 passages à 0 qui doivent être séparés de 8 ms au moins
     
@@ -1641,8 +1801,9 @@ void zeroCrossingInterrupt ( void ) {
         controlCommand = 255;                                   // Pleine puissance
         controlIntegral -= controlError;                        // gel de l'accumulation de l'intégrale, fonction anti integral windup
       }
-      // *** Régime linéaire de régulation : initialisation du comparateur de CNT1
+      // *** Régime linéaire de régulation (ou SSR max) : initialisation du comparateur de CNT1
       // *** pour le déclenchement du SSR/TRIAC géré par interruptions Timer1
+      // par conséquent, si OCR1A garde sa valeur d'initialisation à 30000 : on n'est pas en régulation linéaire
       OCR1A = energyToDelay [ byte ( controlCommand ) ];
     }
 
@@ -1655,6 +1816,12 @@ void zeroCrossingInterrupt ( void ) {
       TCCR1B = 0;
       TCNT1  = 0;
       controlCommand = 0;
+    }
+    else if ( triacMode == FORCE ) {
+      TCCR1B = 0;
+      TCNT1  = 0;
+      controlCommand = 255;
+      // Note : en mode FORCE, le triac a été déclenché précédemment avant le calcul de la régulation
     }
 
     // Calcul pour les statistiques
@@ -1917,7 +2084,7 @@ void pulseExternalInterrupt ( void ) {
 
   if ( ( TCNT2 == 0 ) && ( TCCR2B == 0 ) ) TCCR2B = 0x07;        // si Timer2 est arrêté on lance le Timer2 pour la vérification de la validité du pulse
   else {                                                         // on stoppe la vérification en cours car de manière évidente le précédent pulse n'était pas valide
-    // et on redémarre la vérification pour la nouvelle détection
+                                                                 // et on redémarre la vérification pour la nouvelle détection
     TCCR2B = 0x00;              // arrêt du Timer
     TCNT2 = 0;                  // on remet le compteur à 0
     TCCR2B = 0x07;              // on redémarre le Timer
