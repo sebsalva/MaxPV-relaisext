@@ -29,7 +29,7 @@
             </li>
             <li class="nav-item"> <a class="nav-link" href="wizard.html">Assistant
                 de configuration</a> </li>
-            <li class="nav-item"> <a class="nav-link" href="configuration.html">Configuration Routeur</a> </li>
+            <li class="nav-item"> <a class="nav-link" href="configuration.html">Configuration Routeur SSR</a> </li>
             <li class="nav-item"> <a class="nav-link active" aria-current="page"
                 href="admin.html">Configuration Web</a>
             </li>
@@ -43,7 +43,7 @@
     </nav>
     <main class="container-fluid">
       <div class="bg-light p-5 rounded">
-        <h1>Administration du système</h1>
+        <h1>Administration Web, Relais HTTP, Routeur PV HTTP, Température</h1>
         <p class="lead"></p>
         <form id="formIPConfig" onsubmit="event.preventDefault();
                     saveConfigMaxPV ( );                    sendAction ( 'rebootesp', this );                    alert('Configuration sauvegardée !<br>Le système redémarre avec les nouveaux paramètres...', 'success', 'liveAlertPlaceholderIPConfig');">
@@ -239,11 +239,14 @@
             </div>
           </div>
           <br>
-          <h4>Configuration Dimmer secondaire HTTP</h4>
-(Avant activation, assurez-vous d'avoir configuré les vos dimmers (nombre, mode, Limite % puissance min et max) en vous connectant sur http://**Adresse_ip OU nom.local**<br>
-           Les autres paramètres du Dimmer secondaire sont les mêmes que ceux du SSR)<br><br>
+          <h4>Configuration Routeur PV HTTP</h4>
+          
+ <p>
+Routeur HTTP secondaire (fonctionnel si le routeur SSR ne route plus ou si mode forcé.</p>
+<p>(Avant activation, assurez-vous d'avoir configuré les vos dimmers (nombre, mode, Limite % puissance min et max) en vous connectant sur http://**Adresse_ip OU nom.local**<br>
+           Les autres paramètres du Routeur PV HTTP sont les mêmes que ceux du Routeur SSR)</p>
            <div class="row mb-3">
-            <div class="col-6"> <label for="dimmer_m" class="form-label">Mode Dimmer actuel</label>
+            <div class="col-6"> <label for="dimmer_m" class="form-label">Mode Routeur HTTP actuel</label>
             <select class="form-select form-select-sm" aria-label=".form-select-sm example" id="dimmer_m" disabled="true">
               <option value="off" selected>Off</option>
               <option value="auto">Auto</option>

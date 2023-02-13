@@ -35,7 +35,7 @@
             <a class="nav-link" href="wizard.html">Assistant de configuration</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="configuration.html">Configuration Routeur</a>
+            <a class="nav-link" href="configuration.html">Configuration Routeur SSR</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="admin.html">Configuration Web</a>
@@ -62,7 +62,7 @@
           <tr>
             <td scope="col">
               <h4>
-                <span class="badge rounded-pill text-bg-warning" id="ssrstate">SSR : ----</span>
+                <span class="badge rounded-pill text-bg-warning" id="ssrstate">Routeur SSR: ----</span>
               </h4>
             </td>
             <td scope="col">
@@ -72,7 +72,7 @@
             </td>
             <td scope="col">
                           <h4>
-                            <span class="badge rounded-pill text-bg-warning" id="dimmerstate">Dimmer : ----</span>
+                            <span class="badge rounded-pill text-bg-warning" id="dimmerstate">Routeur HTTP: ----</span>
                           </h4>
                         </td>
           </tr>
@@ -328,10 +328,10 @@
     setInterval(function () {
       var xhttp1 = new XMLHttpRequest();
       var xhttp2 = new XMLHttpRequest();
-      var xhttp3 = new XMLHttpRequest();
+      //var xhttp3 = new XMLHttpRequest();
       var xhttp4 = new XMLHttpRequest();
-      var xhttp5 = new XMLHttpRequest();
-      var xhttp6 = new XMLHttpRequest();
+      //var xhttp5 = new XMLHttpRequest();
+      //var xhttp6 = new XMLHttpRequest();
 
       xhttp1.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
@@ -366,15 +366,28 @@
 
       xhttp2.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
-          var result = this.responseText;
-          result = "SSR : " + result;
-          document.getElementById("ssrstate").innerHTML = result;
+        var result = this.responseText.split(",");
+        var result2 = "Routeur SSR: " + result[0];
+          document.getElementById("ssrstate").innerHTML = result2;
+        result2 = "Relais: " + result[1];
+          document.getElementById("relaystate").innerHTML = result2; 
+        result2 = "Routeur HTTP: " + result[2];
+          document.getElementById("dimmerstate").innerHTML = result2;
+        if (result[3] == "running") {
+           document.getElementById("ecopvstate").innerHTML = "Routeur running";
+           document.getElementById("ecopvstate").className = "badge rounded-pill text-bg-success";
+                 }
+            else {
+            document.getElementById("ecopvstate").innerHTML = "Routeur offline";
+            document.getElementById("ecopvstate").className = "badge rounded-pill text-bg-warning";
+                 }  
+            
         }
       };
-      xhttp2.open("GET", "api/get?ssrstate", true);
+      xhttp2.open("GET", "api/get?allstates", true);
       xhttp2.send();
 
-      xhttp3.onreadystatechange = function () {
+      /* xhttp3.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
           var result = this.responseText;
           result = "Relais : " + result;
@@ -392,7 +405,7 @@
         }
       };
       xhttp6.open("GET", "api/get?dimmerstate", true);
-      xhttp6.send();
+      xhttp6.send(); */
       
       xhttp4.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
@@ -403,7 +416,7 @@
       xhttp4.open("GET", "api/get?time", true);
       xhttp4.send();
 
-      xhttp5.onreadystatechange = function () {
+      /* xhttp5.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
           var result = this.responseText;
           if (result == "running") {
@@ -417,7 +430,7 @@
         }
       };
       xhttp5.open("GET", "api/get?ping", true);
-      xhttp5.send();
+      xhttp5.send(); */
 
     }, 1000);
 
@@ -436,21 +449,27 @@
 
     function fillRadioMode() {
       var xhttp1 = new XMLHttpRequest();
-      var xhttp2 = new XMLHttpRequest();
-      var xhttp3 = new XMLHttpRequest();
+      //var xhttp2 = new XMLHttpRequest();
+      //var xhttp3 = new XMLHttpRequest();
 
       xhttp1.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
-          var result = this.responseText;
-          if (result == "FORCE") document.getElementById("ssrforce").checked = true;
-          else if (result == "STOP") document.getElementById("ssrstop").checked = true;
+          var result = this.responseText.split(",");
+          if (result[0] == "FORCE") document.getElementById("ssrforce").checked = true;
+          else if (result[0] == "STOP") document.getElementById("ssrstop").checked = true;
           else document.getElementById("ssrauto").checked = true;
-        }
+         if (result[1] == "FORCE") document.getElementById("relayforce").checked = true;
+         else if (result[1] == "STOP") document.getElementById("relaystop").checked = true;
+         else document.getElementById("relayauto").checked = true; 
+        if (result[2] == "FORCE") document.getElementById("dimmerforce").checked = true;
+        else if (result[2] == "STOP") document.getElementById("dimmerstop").checked = true;
+        else document.getElementById("dimmerauto").checked = true;  
+         }
       };
-      xhttp1.open("GET", "api/get?ssrstate", true);
+      xhttp1.open("GET", "api/get?allstates", true);
       xhttp1.send();
 
-      xhttp2.onreadystatechange = function () {
+      /* xhttp2.onreadystatechange = function () {
         if (this.readyState == 4 && this.status == 200) {
           var result = this.responseText;
           if (result == "FORCE") document.getElementById("relayforce").checked = true;
@@ -470,7 +489,7 @@
               }
             };
             xhttp3.open("GET", "api/get?dimmerstate", true);
-            xhttp3.send();
+            xhttp3.send(); */
     }
 
     function sendAction(action, ele) {
