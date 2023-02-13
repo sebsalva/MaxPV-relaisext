@@ -8,7 +8,7 @@ Les modifications apportées sont les suivantes :
   * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn
   * Dans le code actuel, le routeur principal (Ecopv) est prioritaire. Le routeur HTTP prend la main quand Ecopv ne route plus (raoutage = 0). Je ferai des modifications pour faire focntionner les 2 en même temps quand ce code aura été testé de façon approfondie.
  
-*Utilisation Capteur de température DALLAS DS18b20, lecture et calibration. Affichage sur l'interface Web et sous MQTT 
+* Utilisation Capteur de température DALLAS DS18b20, lecture et calibration. Affichage sur l'interface Web et sous MQTT 
 * Gestion de température avec Capteur  pour :
   * Donner un Seuil de température à ne pas dépasser dans page Configuration Web
   * Stopper mode Boost si température >= seuil + hyteresis
