@@ -19,7 +19,7 @@ Les modifications apportées sont les suivantes :
 
 * Sauvegarde des états du relais, du SSR et du routeur HTTP: si Maxpv redémarre, le relais et le SSR ne sont plus en mode automatique mais utiliserons le dernier mode sauvegardé avant extinction.
 
-* Modification de la gestion MQTT auto-discovery pour fonctionner avec le plugin MQTT auto-discovery de Domoticz. Les modifications apportées ne devraient rien changer pour les autres serveurs de Domotique mais je n'ai pas tester.
+* Modification de la gestion MQTT auto-discovery pour fonctionner avec le plugin MQTT auto-discovery de Domoticz. Les modifications apportées ne devraient rien changer pour les autres serveurs de Domotique mais je n'ai pas testé.
  
 Ces modifications sont maintenant disponibles dans Maxpv (non forké). Ces modifications ont été codées originalement et sont peut être différentes :
 * Utilisation d'un Relais HTTP (appel du relais via HTTP pour ON et OFF) en place du relais physique (l'utilisation du relais physique est toujours possible). 
