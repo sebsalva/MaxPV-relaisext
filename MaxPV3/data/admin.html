@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=0.8">
     <meta name="description" content="">
     <meta name="author" content="Bernard Legrand">
-    <title>MaxPv! Administration</title>
+    <title>MaxPv! Configuration Web</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
       integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx"
@@ -43,11 +43,11 @@
     </nav>
     <main class="container-fluid">
       <div class="bg-light p-5 rounded">
-        <h1>Administration Web, Relais HTTP, Routeur PV HTTP, Température</h1>
+        <h1>Configuration Web, Relais HTTP, Routeur PV HTTP, Température</h1>
         <p class="lead"></p>
         <form id="formIPConfig" onsubmit="event.preventDefault();
                     saveConfigMaxPV ( );                    sendAction ( 'rebootesp', this );                    alert('Configuration sauvegardée !<br>Le système redémarre avec les nouveaux paramètres...', 'success', 'liveAlertPlaceholderIPConfig');">
-          <h4>Configuration du webserver MaxPV!</h4>
+          <h4>Configuration Réseau</h4>
           <br>
           <div class="row mb-3">
             <div class="col-6"> <label for="ip" class="form-label">Adresse IP
@@ -243,10 +243,10 @@
           
  <p>
 Routeur HTTP secondaire (fonctionnel si le routeur SSR ne route plus ou si mode forcé.</p>
-<p>(Avant activation, assurez-vous d'avoir configuré les vos dimmers (nombre, mode, Limite % puissance min et max) en vous connectant sur http://**Adresse_ip OU nom.local**<br>
-           Les autres paramètres du Routeur PV HTTP sont les mêmes que ceux du Routeur SSR)</p>
+<p>(Avant activation, assurez-vous d'avoir configuré vos dimmers HTTP (mode, Limite % puissance min et max) en vous connectant sur http://**Adresse_ip** OU http://**nomdimmer.local** (à modifier)<br>
+           Les autres paramètres du Routeur PV HTTP sont les mêmes que ceux du Routeur SSR</p>
            <div class="row mb-3">
-            <div class="col-6"> <label for="dimmer_m" class="form-label">Mode Routeur HTTP actuel</label>
+            <div class="col-6"> <label for="dimmer_m" class="form-label">Mode Routeur HTTP actuel (devrait être Off avant modification)</label>
             <select class="form-select form-select-sm" aria-label=".form-select-sm example" id="dimmer_m" disabled="true">
               <option value="off" selected>Off</option>
               <option value="auto">Auto</option>
