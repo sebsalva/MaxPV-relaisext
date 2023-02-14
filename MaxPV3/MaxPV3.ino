@@ -745,6 +745,7 @@ void setup()
 
   // Routeur HTTP init
   dimmer_init( );
+  delay (100);
 
   // Configuration du CallBack Ping
   setPingCallback ();
@@ -1796,14 +1797,14 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#CMDTOPIC#"), F(MQTT_SET_RELAY_MODE));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
-  // MQTT_DIMMER_MODE
+  // MQTT_Routeur_MODE
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("select"));
-  topic.replace(F("#SENSORID#"), F("Dimmer HTTP"));
+  topic.replace(F("#SENSORID#"), F("Routeur HTTP"));
 
   payload = configPayloadTemplate;
-  payload.replace(F("#SENSORID#"), F("Dimmer HTTP"));
-  payload.replace(F("#SENSORNAME#"), F("Dimmer HTTP"));
+  payload.replace(F("#SENSORID#"), F("Routeur HTTP"));
+  payload.replace(F("#SENSORNAME#"), F("Routeur HTTP"));
   payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
   payload.replace(F("#STATECLASS#"), F(""));
   payload.replace(F("#STATETOPIC#"), F(MQTT_DIMMER_MODE));
@@ -1873,6 +1874,7 @@ void relais_http (void)
       //appel relais ext on
       if (appel_http(String(a_div2_urlon)) != -1)
         etatrelais = ON;
+        delay(100);
     }
   }
   else
@@ -1883,6 +1885,7 @@ void relais_http (void)
       //appel relais ext off
       if (appel_http(String(a_div2_urloff)) != -1)
         etatrelais = OFF;
+        delay(100);
     }
   }
 }
