@@ -1587,7 +1587,7 @@ void oLedPrint ( int page ) {
         oled.print ( F("MaxPV! ") );
         oled.println ( F(VERSION) );
         oled.println ( );
-        oled.println ( F(" Démarrage") );
+        oled.println ( F(" Demarrage") );
         oled.println ( F("en cours...") );
         break;
       }
@@ -1596,7 +1596,7 @@ void oLedPrint ( int page ) {
         oled.print ( F("MaxPV! ") );
         oled.println ( F(VERSION) );
         oled.println ( );
-        oled.println ( F(" Démarré !") );
+        oled.println ( F(" OK") );
         break;
       }
 
