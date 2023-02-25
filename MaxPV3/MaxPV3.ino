@@ -109,12 +109,12 @@ unsigned long generalCounterSecond = 0;
 bool shouldSaveConfig = false;
 // Flag indiquant la nécessité de lire les paramètres de routage EcoPV
 bool shouldReadParams = false;
-// Flag indiquant la nécessité de vérifier la connexion effective au Wifi
-bool shouldCheckWifi = false;
-unsigned long refTimePingWifi = millis();
 unsigned long refTimeContactEcoPV = millis();
 bool contactEcoPV = false;
 
+//flag réseau
+bool shouldCheckWifi = false;
+bool shouldCheckMQTT = false;
 
 
 // Variables pour l'historisation
@@ -153,7 +153,6 @@ WiFiClient tcpClient;
 AsyncMqttClient mqttClient;
 WiFiUDP ntpUDP;
 NTP timeClient(ntpUDP);
-AsyncPing ping;
 
 #if defined (MAXPV_FTP_SERVER)
 FtpServer       ftpSrv;
@@ -257,7 +256,10 @@ void setup()
     WiFi.mode(WIFI_STA);
   }
 
+  
   wifiManager.autoConnect(SSID_CP);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
 
   Serial.println();
   Serial.println(F("Connecté au réseau local en utilisant les paramètres IP, GW, SN, DNS1, DNS2 :"));
@@ -281,7 +283,7 @@ void setup()
     WiFi.dnsIP(1).toString().toCharArray(static_dns2, 16);
   }
 
-  WiFi.setAutoReconnect(true);
+  //WiFi.setAutoReconnect(true);
   wifiManager.setDebugOutput(false);
   
   // Sauvegarde de la configuration si nécessaire
@@ -747,8 +749,6 @@ void setup()
   dimmer_init( );
   delay (100);
 
-  // Configuration du CallBack Ping
-  setPingCallback ();
 
 
   // ***********************************************************************
@@ -876,15 +876,10 @@ void setup()
     }
     // fin de traitement MQTT
 
-    // On ping la Gateway périodiquement, ici tous les 30 secondes, 2 fois maxi, timeout 100 ms
-    if (generalCounterSecond % 30 == 7) {
-      IPAddress _gw;
-      _gw.fromString(static_gw);
-      ping.begin (_gw, 2, 1000);
-      // Si le Wifi est déconnecté, on lance également la procédure de vérification
-      if (!WiFi.isConnected()) shouldCheckWifi = true;
-    }
-    
+     if (!WiFi.isConnected()) shouldCheckWifi = true;
+
+     if (!mqttClient.connected ()) shouldCheckMQTT = true;
+   
     //appel methode gestion relais_ext
       if (a_div2_ext == ON) relais_http ( );
 
@@ -896,7 +891,7 @@ void setup()
       dimmer_engine();
   },
   nullptr, true);
-  delay(1000);
+  delay(500);
 }
 
 
@@ -906,18 +901,15 @@ void setup()
 ///////////////////////////////////////////////////////////////////
 void loop()
 {
-
   watchDogContactEcoPV();
-  yield();
+  delay(100);
   // Exécution des tâches récurrentes Ticker
   ts.update();
-  yield();
-  if (shouldCheckWifi) {
-    watchDogWifi();
-    shouldCheckWifi = false;
-  }
 
-  yield();
+  if (shouldCheckWifi) watchDogWifi();
+    
+  if (shouldCheckMQTT) startMqtt();  
+  delay(100);
 
 }
 
@@ -1289,7 +1281,7 @@ void relayModeEcoPV(byte opMode)
   str = String(opMode);
   str.toCharArray(buff, 2);
   if (mqttClient.connected ()) mqttClient.publish(MQTT_RELAY_MODE, 0, true, buff);
-
+  
 }
 
 void SSRModeEcoPV(byte opMode)
@@ -1312,6 +1304,17 @@ void SSRModeEcoPV(byte opMode)
   if (buff[0] == '0') strcpy(tmp, "stop");
   else if (buff[0] == '1') strcpy(tmp, "force"); else strcpy(tmp, "auto");
   if (mqttClient.connected ()) mqttClient.publish(MQTT_TRIAC_MODE, 0, true, tmp);
+}
+
+void Dimmer_act_EcoPV(byte opMode)
+{
+  String command = F("SETDIM,");
+  if (opMode == OFF)
+    command += F("OFF");
+  if (opMode == ON)
+    command += F("ON");
+  command += F(",END#");
+  Serial.print(command);
 }
 
 void setRefIndexJour(void)
@@ -1380,52 +1383,37 @@ void boostOFF(void)
 }
 
 
-
-///////////////////////////////////////////////////////////////////
-// Fonctions Callback Ping                                       //
-///////////////////////////////////////////////////////////////////
-
-void setPingCallback ( void )
-{
-  // callback for each answer/timeout of ping
-  ping.on(true, [](const AsyncPingResponse & response) {
-    if (response.answer) {
-      // le ping est revenu valide, on ré-initialise le WD
-      refTimePingWifi = millis();
-      return true; // on s'arrête
-    }
-    else {
-      // le ping n'est pas revenu
-      tcpClient.println(F("Pas de réponse au ping"));
-      shouldCheckWifi = true;
-      return false;
-    }
-  });
-}
-
-
 ///////////////////////////////////////////////////////////////////
 // Fonctions du WatchDog Wifi                                    //
 ///////////////////////////////////////////////////////////////////
 void watchDogWifi ( void )
-{
-  if ( ( millis() - refTimePingWifi ) > PING_WIFI_TIMEOUT ) {    
+{  
     // On force la déconnexion du service MQTT
     // Si les services sont déjà déconnectés, soit ils n'ont pas été configurés
     // soit les tentatives de reconnexion sont déjà en cours
 
     if (mqttClient.connected ()) mqttClient.disconnect(true);
-    delay (50);
-
+    delay (100);
+    //WiFi.disconnect();
+    //delay(100);
+    //WiFi.reconnect();
+    //WiFi.begin();
     wifiManager.autoConnect(SSID_CP);
-    delay (50);
-
-    if (mqttActive == ON) startMqtt();
-
-    yield ( );
+    delay (100);
     
-    refTimePingWifi = millis();
-  }   
+     // Demarrage multicast DNS avec nom maxpv
+    if (MDNS.begin(M_DNS)) {
+    MDNS.addService("http", "tcp", 80);
+    tcpClient.println(F("mDNS démarré ! Accès http://maxpv.local/"));
+  }
+    delay(100);
+    //webserver
+    webServer.begin();
+    delay (100); 
+    if (mqttActive == ON) startMqtt();    
+
+    shouldCheckWifi=false;
+    shouldCheckMQTT=false;
 }
 
 void timeScheduler(void)
@@ -1463,6 +1451,7 @@ void startMqtt (void) {
   mqttClient.setWill(MQTT_STATE, 0, true, "disconnected");
   mqttConnect();
   delay(3000);
+  shouldCheckMQTT=false;
 }
 
 void mqttConnect (void)
@@ -1530,7 +1519,7 @@ void mqttTransmit(void)
     else if (dimmer_m == FORCE) strcpy(tmp,"force"); else strcpy(tmp, "auto"); 
     mqttClient.publish(MQTT_DIMMER_MODE, 0, true, tmp);
   }
-  //else mqttClient.connect();        // Sinon on ne transmet pas mais on tente la reconnexion
+  //else startMqtt();        // Sinon on ne transmet pas mais on tente la reconnexion
 }
 void onMqttConnect(bool sessionPresent)
 {
