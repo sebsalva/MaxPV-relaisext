@@ -84,7 +84,7 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define VERSION          "3.512"       // Version logicielle
+#define VERSION          "3.554"       // Version logicielle
 #define SERIAL_BAUD      500000       // Vitesse de la liaison port série
 #define SERIALTIMEOUT       100       // Timeout pour les interrogations sur liaison série en ms
 
@@ -477,7 +477,7 @@ SSD1306AsciiAvrI2c      oled;
 // *** Utilise Dallas capteur DS18B20
 #define Dallas
 #if defined (Dallas)
-#define Dallas_REFRESH_PERIOD 10
+#define Dallas_REFRESH_PERIOD 60
 #include "OneWire.h"
 #include "DallasTemperature.h"
 #define tempPin                9   // OUT DIGITAL = PIN D09, Température Dallas DS18B20
@@ -489,6 +489,11 @@ short temp = -1;
 unsigned short hysteresis = 1;      // hysteresis 
 bool temp_bool=OFF;                 // bool utilisé pour stocker passage au dessus température seuil + hysteresis 
           
+// ***********************************************************************************
+// ****************** Définitions pour Etat Dimmer                     ***************
+// ***********************************************************************************
+byte dimmer_act = OFF;              // utilisé pour savoir si Dimmer est actif ou non
+
 
 // ***********************************************************************************
 // **********************  FIN DES DEFINITIONS ET DECLARATIONS  **********************
@@ -586,6 +591,7 @@ void loop ( ) {
   float                inv_stats_samples;
 
   float                Filter_param;
+  float                Psurplus = 0;
   static float         Pact_filtered = 0;
   static float         Prouted_filtered = 0;
   static unsigned int  Div2_On_cnt = 0;
@@ -669,21 +675,23 @@ void loop ( ) {
 
     // *** Calcul des valeurs filtrées de Pact et Prouted                 ***
     // *** Usage : déclenchement du relais secondaire de délestage        ***
-    // *** Uniquement en mode Triac AUTO                                  ***
-    // *** Pour éviter le déclenchement du relais en mode Triac FORCE     ***
+    Filter_param = 1 / float ( 1 + ( int ( T_DIV2_TC ) * 60 ) );
+    Pact_filtered = Pact_filtered + Filter_param * ( Pact - Pact_filtered );
+    Prouted_filtered = Prouted_filtered + Filter_param * ( Prouted - Prouted_filtered );
+
+    // En mode TRIAC/SSR AUTOM, le surplus PV correspond à la puissance routée
     if ( triacMode == AUTOM ) {
-      Filter_param = 1 / float ( 1 + ( int ( T_DIV2_TC ) * 60 ) );
-      Pact_filtered = Pact_filtered + Filter_param * ( Pact - Pact_filtered );
-      Prouted_filtered = Prouted_filtered + Filter_param * ( Prouted - Prouted_filtered );
+      Psurplus = Prouted_filtered;
     }
+    // En mode TRIAC/SSR ON ou OFF, le surplus PV correspond à - la puissance active
     else {
-      Pact_filtered = 0;
+      Psurplus = -Pact_filtered;
       Prouted_filtered = 0;
     }
 
     // *** Déclenchement et gestion du relais secondaire de délestage     ***
-    if ( ( relayMode == AUTOM ) && ( triacMode == AUTOM ) ) {
-      if ( ( Prouted_filtered >= float ( P_DIV2_ACTIVE ) ) && ( Div2_Off_cnt == 0 ) ) {
+    if ( ( relayMode == AUTOM ))  {
+      if ( ( Psurplus >= float ( P_DIV2_ACTIVE ) ) && ( Div2_Off_cnt == 0 ) && ( digitalRead ( relayPin ) == OFF ) ) {
         if (A_DIV2_EXT == 0) digitalWrite ( relayPin, ON );    // Activation du relais de délestage test si relais ext
         Div2_On_cnt = 60 * T_DIV2_ON;     // Initialisation de la durée de fonctionnement minimale en sevondes
       }
@@ -697,20 +705,12 @@ void loop ( ) {
       else if ( Div2_Off_cnt > 0 ) {
         Div2_Off_cnt --;                  // décrément d'une seconde
       }
-      else if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );
     }
     else {
       Div2_On_cnt = 0;
       Div2_Off_cnt = 0;
-      if ( relayMode != AUTOM )
-      {
-        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
-      }
-      else {
-        if (A_DIV2_EXT == 0) digitalWrite ( relayPin, OFF );
-        // Cas où le SSR est en mode forcé et le relais en mode AUTO :
-      }
-    }                                                                 // le relais ne peut être activé (OFF)
+      digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
+    }                                                          
 
     // *** Vérification de l'état du relais de délestage                  ***
     if ( A_DIV2_EXT == 0 && digitalRead ( relayPin ) == ON ) {
@@ -901,7 +901,8 @@ void startPVR ( void ) {
   delay ( 10 );
   VCC_1BIT = ( 1.1 / analogReadReference ( ) );  // Calcul de la valeur en V d'un bit ADC
   delay ( 10 );
-
+  // dimmer est OFF 
+  dimmer_act = OFF ;
   // arrêt du SSR par sécurité
   TRIAC_OFF;
   // arrêt du relais secondaire de délestage  par sécurité
@@ -1046,6 +1047,7 @@ void serialRequest ( void ) {
       noInterrupts ( );
       indexImpulsion = 0;
       interrupts ( );
+      indexRelayOn = 0;
       indexWrite ( );
       Serial.print ( F("DONE:INDX0,OK,") );
     }
@@ -1161,7 +1163,13 @@ void serialRequest ( void ) {
       interrupts ( );
       Serial.print ( F("DONE:SAVECFG,OK,") );
     }
-
+    else if ( incomingCommand.startsWith ( F("SETDIM") ) ) {
+      //reception Etat Dimmer HTTP
+      incomingCommand.replace ( F("SETDIM,"), "" );
+      incomingCommand.replace ( F(",END"), "" );
+      if ( incomingCommand == F("ON") )       dimmer_act  = ON;
+      else if ( incomingCommand == F("OFF") ) dimmer_act = OFF;
+    }
     else if ( incomingCommand.startsWith ( F("SETBOOST") ) ) {
       int index = 0;
       long bT = 0;
@@ -1417,7 +1425,7 @@ if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
     interrupts ( );
     if ( secondsOnline == 8 ) {    // une fois par minute, on teste l'absence d'impulsions
       if ( deltaTimeImpulsion_tmp == lastMinuteDeltaTimeImpulsion ) {
-        Pimpulsion = 0;
+        Pimpulsion = -1;
         impulsionFlag = false;
       }
       lastMinuteDeltaTimeImpulsion = deltaTimeImpulsion_tmp;
@@ -1596,7 +1604,7 @@ void oLedPrint ( int page ) {
         oled.print ( F("MaxPV! ") );
         oled.println ( F(VERSION) );
         oled.println ( );
-        oled.println ( F(" OK") );
+        oled.println ( F("En fonction") );
         break;
       }
 
@@ -1782,11 +1790,13 @@ void zeroCrossingInterrupt ( void ) {
 
     // on calcule la commande à appliquer (correction PI)
     // note : lissage de l'erreur sur 2 périodes pour l'action proportionnelle pour corriger le bruit systématique
+    
+    //dimmer
     controlCommand = long ( GAIN_I ) * controlIntegral + long ( GAIN_P ) * ( controlError + lastControlError );
 
     // application du gain fixe de normalisation : réduction de COMMAND_BIT_SHIFT bits
     controlCommand = controlCommand >> COMMAND_BIT_SHIFT;
-
+    //dimmer	
     if ( controlCommand <= 0 ) {                                // équilibre ou importation, donc pas de routage de puissance
       TCCR1B = 0;                                               // arrêt du Timer = inhibition du déclenchement du triac pour cette période
       TCNT1  = 0;                                               // compteur à 0
@@ -1810,9 +1820,10 @@ void zeroCrossingInterrupt ( void ) {
     // si on n'est pas en mode automatique, on gèle la commande routage (==> arrêt Timer et pas d'accumulation de puissance routée)
     // mais on a quand même fait auparavant les calculs de régulation
     //ajout Temperature_test
+    // ajout Dimmer test : si actif ecopv est OFF
     if ( temp >= T_MAX + hysteresis ) temp_bool=ON;
     if ( temp <= T_MAX - hysteresis ) temp_bool=OFF;
-    if ( triacMode != AUTOM || temp_bool) {
+    if ( (triacMode == STOP) || temp_bool || (dimmer_act == ON) ) {
       TCCR1B = 0;
       TCNT1  = 0;
       controlCommand = 0;
@@ -2033,7 +2044,7 @@ ISR ( ADC_vect ) {
 // Interrupt service routine Timer1 pour générer le pulse de déclenchement du TRIAC //
 //////////////////////////////////////////////////////////////////////////////////////
 ISR ( TIMER1_COMPA_vect ) {   // TCNT1 = OCR1A : instant de déclenchement du SSR/TRIAC
- 
+
   TRIAC_ON;
   // chargement du compteur pour que le pulse SSR/TRIAC s'arrête à l'instant PULSE_END
   // relativement au passage à 0 (nécessite PULSE_END > OCR1A)
