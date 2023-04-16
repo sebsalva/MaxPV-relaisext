@@ -20,7 +20,9 @@ Les modifications apportées sont les suivantes :
 * Sauvegarde des états du relais, du SSR et du routeur HTTP: si Maxpv redémarre, le relais et le SSR ne sont plus en mode automatique mais utiliserons le dernier mode sauvegardé avant extinction.
 
 * Modification de la gestion MQTT auto-discovery pour fonctionner avec le plugin MQTT auto-discovery de Domoticz. Les modifications apportées ne devraient rien changer pour les autres serveurs de Domotique mais je n'ai pas testé.
- 
+
+* Optimisation Mode Boost. Mode Boost non demarré si le CE (branché sur SSR) est chargé (à atteind sa température de consigne). La condition est : MaxPv Routeur SSR utilise le mode AUTO, de l'énergie est exportée sur le réseau et l'énergie pour Routeur SSR est à 0. Le mode Boost n'étant pas demarré MaxPv Routeur SSR reste au mode AUTO. 
+
 (Ces modifications sont maintenant disponibles dans Maxpv (non forké). Ces modifications ont été codées originalement et sont peut être différentes :)
 * Utilisation d'un Relais HTTP (appel du relais via HTTP pour ON et OFF) en place du relais physique (l'utilisation du relais physique est toujours possible). 
 * Ajout Multicast DNS (mDNS). Permet d'appeler le routeur avec http://maxpv.local/
