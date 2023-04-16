@@ -4,6 +4,7 @@
 #define DEBUG_DIMMER
 //#define DEBUG_SERIAL
 //#define DEBUG_HTTPC
+#define MAXPV_FTP_SERVER
 
 
 // ***********************************************************************************
@@ -77,7 +78,7 @@
 
 
 #define MAXPV_VERSION "3.355"
-#define MAXPV_VERSION_FULL "MaxPV! 3.355"
+#define MAXPV_VERSION_FULL "MaxPV! 3.356"
 
 
 #define OFF 0
@@ -171,10 +172,12 @@
 #define MQTT_P_ACT         "maxpv/pact"
 #define MQTT_P_APP         "maxpv/papp"
 #define MQTT_P_ROUTED      "maxpv/prouted"
+#define MQTT_P_ROUTED2      "maxpv/prouted2"
 #define MQTT_P_EXPORT      "maxpv/pexport"
 #define MQTT_P_IMPULSION   "maxpv/pimpulsion"
 #define MQTT_COS_PHI       "maxpv/cosphi"
 #define MQTT_INDEX_ROUTED       "maxpv/indexrouted"
+#define MQTT_INDEX_ROUTED2       "maxpv/indexrouted2"
 #define MQTT_INDEX_IMPORT       "maxpv/indeximport"
 #define MQTT_INDEX_EXPORT       "maxpv/indexexport"
 #define MQTT_INDEX_IMPULSION    "maxpv/indeximpulsion"
