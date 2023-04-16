@@ -5,8 +5,8 @@ Les modifications apportées sont les suivantes :
 
 * Ajout Gestion second Routeur HTTP qui permet de gérer une chaine de Dimmers. Cette version combine donc 2 routeurs :
   * Quand le routeur principal (EcoPv) ne route plus, le routeur HTTP prend la main. Il route vers des Dimmers HTTP en cascade (Idée originale provenant de ce prototype https://github.com/xlyric/pv-router-esp32).
-  * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn
-  * Dans le code actuel, le routeur principal (Ecopv) est prioritaire. Le routeur HTTP prend la main quand Ecopv ne route plus (raoutage = 0). Je ferai des modifications pour faire focntionner les 2 en même temps quand ce code aura été testé de façon approfondie.
+  * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn. Testé avec SSR Jotta
+  * Dans le code actuel, le routeur principal (Ecopv) est prioritaire. Le routeur HTTP prend la main quand Ecopv ne route plus (routage = 0). Je ferai des modifications pour faire focntionner les 2 en même temps quand ce code aura été testé de façon approfondie. Pour l'instant, l'utilisation d'un SSR random et d'un SSR JOTTA non modifé (non random) crée des interférences. Avoir avec d'autres matériels
  
 * Utilisation Capteur de température DALLAS DS18b20, lecture et calibration. Affichage sur l'interface Web et sous MQTT 
 * Gestion de température avec Capteur précédent pour :
