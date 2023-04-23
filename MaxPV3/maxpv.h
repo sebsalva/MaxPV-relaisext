@@ -77,7 +77,7 @@
 // Et la capacité d'export en CSV
 
 
-#define MAXPV_VERSION "3.355"
+#define MAXPV_VERSION "3.356"
 #define MAXPV_VERSION_FULL "MaxPV! 3.356"
 
 
@@ -154,43 +154,6 @@
 #define INDEX_IMPORT_J 25
 #define INDEX_EXPORT_J 26
 #define INDEX_IMPULSION_J 27
-
-// ***********************************************************************************
-// ****************************   MQTT                    ****************************
-// ***********************************************************************************
-#define DEFAULT_MQTT_SERVER     "192.168.1.100" // Serveur MQTT par défaut
-#define DEFAULT_MQTT_PORT       1883            // Port serveur MQTT
-#define RECONNECT_TIME          5               // Délai de reconnexion en secondes suite à perte de connexion du serveur mqtt
-// Définition des topics MQTT
-#define DEFAULT_MQTT_PUBLISH_PERIOD   10     // en secondes, intervalle de publication MQTT
-
-
-// Définition des channels MQTT
-#define MQTT_STATE         "maxpv/state"
-#define MQTT_V_RMS         "maxpv/vrms"
-#define MQTT_I_RMS         "maxpv/irms"
-#define MQTT_P_ACT         "maxpv/pact"
-#define MQTT_P_APP         "maxpv/papp"
-#define MQTT_P_ROUTED      "maxpv/prouted"
-#define MQTT_P_ROUTED2      "maxpv/prouted2"
-#define MQTT_P_EXPORT      "maxpv/pexport"
-#define MQTT_P_IMPULSION   "maxpv/pimpulsion"
-#define MQTT_COS_PHI       "maxpv/cosphi"
-#define MQTT_INDEX_ROUTED       "maxpv/indexrouted"
-#define MQTT_INDEX_ROUTED2       "maxpv/indexrouted2"
-#define MQTT_INDEX_IMPORT       "maxpv/indeximport"
-#define MQTT_INDEX_EXPORT       "maxpv/indexexport"
-#define MQTT_INDEX_IMPULSION    "maxpv/indeximpulsion"
-#define MQTT_TRIAC_MODE    "maxpv/triacmode"
-#define MQTT_SET_TRIAC_MODE    "maxpv/triacmode/set"
-#define MQTT_RELAY_MODE    "maxpv/relaymode"
-#define MQTT_SET_RELAY_MODE    "maxpv/relaymode/set"
-#define MQTT_DIMMER_MODE    "maxpv/dimmermode"
-#define MQTT_SET_DIMMER_MODE    "maxpv/dimmermode/set"
-#define MQTT_BOOST_MODE      "maxpv/boost"
-#define MQTT_SET_BOOST_MODE  "maxpv/boost/set"
-#define MQTT_STATUS_BYTE   "maxpv/statusbyte"
-#define MQTT_TEMP   "maxpv/temperature"
 
 
 

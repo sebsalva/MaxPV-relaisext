@@ -39,5 +39,5 @@ void dimmer_init( void );
 void dimmer_init0( void );
 int pow_to_pourcent( int );
 void Dimmer_act_EcoPV( byte );
-
+void call_dimmer(int, int);
 #endif
