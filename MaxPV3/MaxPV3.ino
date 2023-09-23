@@ -42,7 +42,7 @@
 // ***********************************************************************************
 
 // Configuration IP statique mode STA
-char static_ip[16] = "192.168.1.200";
+char static_ip[16] = "192.168.1.250";
 char static_gw[16] = "192.168.1.1";
 char static_sn[16] = "255.255.255.0";
 char static_dns1[16] = "192.168.1.1";
