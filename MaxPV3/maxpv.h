@@ -124,7 +124,7 @@
 // ATTENTION : dans le reste du programme les 4 index de début de journée sont ajoutés à la suite
 // pour les informations disponibles par l'API
 // ils doivent toujours être situés en toute fin de tableu
-#define NB_STATS 24     // Nombre d'informations statistiques transmis par EcoPV (24 = 23 + VERSION)
+#define NB_STATS 25     // Nombre d'informations statistiques transmis par EcoPV (24 = 23 + VERSION)
 #define NB_STATS_SUPP 4 // Nombre d'informations statistiques supplémentaires
 //#define ECOPV_VERSION 0
 #define V_RMS 1
@@ -149,11 +149,12 @@
 #define STATUS_BYTE 20
 #define ONTIME 21
 #define SAMPLES 22
-#define TEMP 23
-#define INDEX_ROUTED_J 24
-#define INDEX_IMPORT_J 25
-#define INDEX_EXPORT_J 26
-#define INDEX_IMPULSION_J 27
+#define INDEXRELAYON 23
+#define TEMP 24
+#define INDEX_ROUTED_J 25
+#define INDEX_IMPORT_J 26
+#define INDEX_EXPORT_J 27
+#define INDEX_IMPULSION_J 28
 
 
 

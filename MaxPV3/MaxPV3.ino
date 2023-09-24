@@ -78,13 +78,9 @@ short  etatrelais    	  = 0;
 // Configuration Dimmer
 extern short  dimmer_m;
 extern char dimmer_ip[16] ; // nom ou IP du dimmer
-//extern String dimmer_ip2;   // IP du dimmer copie de dimmer_ip ou obtenu par résolution
-//extern int dimmer_pow;                       // puissance dimmer
-//extern short dimmer_act;               // mode dimmer
-//extern short dimmer_count;              // compteur utilisé pour ping
 extern short dimmer_sumpourcent ;       // somme des porcentages de fonctionnement max sur tous les dimmers
-extern int dimmer_sumpow ;             // somme des puissances sur tous les dimmers
-
+extern short dimmer_sumpow ;             // somme des puissances sur tous les dimmers
+extern short dimmer_period ;             //Période activité en secondes
 // Gestion Température
 int   temp 	 = -1;
 short hysteresis = 1;
@@ -610,6 +606,7 @@ void setup()
                 16);
       dimmer_sumpourcent = jsonConfig["dimmer_sumpourcent"];
       dimmer_sumpow = jsonConfig["dimmer_sumpow"];
+      dimmer_period = jsonConfig["dimmer_period"];
       //config temperature
       tempactive = jsonConfig["temp_active"];
       tempmax = jsonConfig["temp_max"];
@@ -985,6 +982,7 @@ bool configRead(void)
                   16);
         dimmer_sumpourcent = jsonConfig["dimmer_sumpourcent"];
         dimmer_sumpow = jsonConfig["dimmer_sumpow"];
+        dimmer_period = jsonConfig["dimmer_period"];
         //config temperature
         tempactive = jsonConfig["temp_active"] | OFF;
         tempmax = jsonConfig["temp_max"] | 55;
@@ -1038,6 +1036,7 @@ void configWrite(void)
   jsonConfig["dimmer_ip"] = dimmer_ip;
   jsonConfig["dimmer_sumpourcent"] = dimmer_sumpourcent;
   jsonConfig["dimmer_sumpow"] = dimmer_sumpow;
+  jsonConfig["dimmer_period"] = dimmer_period;
   //temperature
   jsonConfig["temp_active"] = tempactive;
   jsonConfig["temp_max"] = tempmax;
