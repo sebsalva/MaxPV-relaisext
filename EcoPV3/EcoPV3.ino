@@ -592,6 +592,7 @@ void loop ( ) {
 
   float                Filter_param;
   float                Psurplus = 0;
+  float                PestimatedProd = 0;
   static float         Pact_filtered = 0;
   static float         Prouted_filtered = 0;
   static unsigned int  Div2_On_cnt = 0;
@@ -642,8 +643,8 @@ void loop ( ) {
       stats_error_status &= B11111110;
 
     // *** Vérification du routage pleine puissance                       ***
-    if ( ( stats_routed_power / ( 2 * NB_CYCLES ) ) >= 254 )
-      // Note : on teste la pleine puissance si on atteint 254 alors que le max possible est 255.
+    if ( ( stats_routed_power / ( 2 * NB_CYCLES ) ) >= 245 )
+      // Note : on teste la pleine puissance si on atteint 245 alors que le max possible est 255.
       // Ceci pour plus de fiabilité de la détection de la pleine puissance routée.
       stats_error_status |= B00000010;
     else
@@ -720,14 +721,18 @@ void loop ( ) {
     else stats_error_status &= B11111011;
 
 
-    // *** Correction de l'artefact de puissance routée maximale          ***
+   // *** Correction de l'artefact de puissance routée maximale          ***
     // *** obtenue si la charge pilotée par le SSR se déconnecte.         ***
     // *** But : amélioration du comptage de l'énergie routée.            ***
     // *** Remarque 1, Ca ne couvre pas tous les cas de figure.           ***
     // *** Remarque 2, on ne fait pas la correction pour le pilotage du   ***
     // *** relais de délestage pour éviter l'exportation.                 ***
+    
+    if (Pimpulsion > 0) PestimatedProd = Pimpulsion * CNT_CALIB;
+    else                PestimatedProd = P_INSTALLPV;
+ 
     if ( ( stats_error_status & B00000010 )            // Routage maximum vers la résistance
-         && ( P_INSTALLPV + Pact <= P_RESISTANCE ) )   // Cas impossible : charge déconnectée
+      && ( PestimatedProd + Pact <= P_RESISTANCE ) )   // Cas impossible : charge déconnectée
       Prouted = 0;
 
     // *** Accumulation des énergies routée, importée, exportée           ***
@@ -1130,7 +1135,7 @@ void serialRequest ( void ) {
           relayplusTime = -1;
           Serial.print ( F("RELAYPLUSTIME,-1,END") );
       }
-      Serial.print ( F("DONE:SETRELAY,OK,") );
+      Serial.print ( F("DONE:SETRELAY,OK,") );     
       //sauvegarde etat
       byte *tmp = (byte *) pvrParamConfig [18].adr;
       noInterrupts ( );
@@ -1156,9 +1161,9 @@ void serialRequest ( void ) {
       }
       Serial.print ( F("DONE:SETSSR,OK,") );
       //sauvegarde etat
-      byte *tmp = (byte *) pvrParamConfig [18].adr;
+      byte *tmp = (byte *) pvrParamConfig [17].adr;
       noInterrupts ( );
-      *tmp = relayMode ;
+      *tmp = triacMode ;
       eeConfigWrite ( );
       interrupts ( );
       Serial.print ( F("DONE:SAVECFG,OK,") );
