@@ -97,12 +97,12 @@
                 if (this.readyState == 4 && this.status == 200) {
                     result3 = this.responseText.trim();
                     document.getElementById("webver").innerHTML = result3;
-                    xhttp4.open("GET", urlVersion, true);
-                    xhttp4.send();
+                    /* xhttp4.open("GET", urlVersion, true);
+                    xhttp4.send(); */
                 }
             };
 
-            xhttp4.onreadystatechange = function () {
+            /* xhttp4.onreadystatechange = function () {
                 if (this.readyState == 4 && this.status == 200) {
                     result4 = JSON.parse(this.responseText);
                     if ( result4["ecopvver"] != result1 ) {
@@ -130,7 +130,7 @@
                     }
                     document.getElementById("livemsg").innerHTML = messageVersion;
                 }
-            };
+            }; */
         }
 
         setInterval(function () {
