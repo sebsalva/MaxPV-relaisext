@@ -761,10 +761,27 @@ void setup()
   nullptr, true);
 
   // Lecture et traitement des messages de l'Arduino sur port série
+  // Vérirification du chargement du CE 
+
   ts.add(
     1, 70, [&](void *)
   {
     if ( Serial.available ( ) ) serialProcess ( );
+    
+    // Verification CE
+    // triac en auto et (
+    //export et routage à 0 ou
+    // temp attente ou 
+    // export > limite limite = (max puissance pannneau - 20% - 150 (talon min) - puiss chauffe eau, 0)
+    //)
+    if (outputfull == OFF && ecoPVStats[TRIAC_MODE].toInt() == AUTOM) 
+    {
+      int lim= max( 0L, ecoPVConfig[P_INSTALLPV].toInt()- ecoPVConfig[P_INSTALLPV].toInt()*20/100-150-ecoPVConfig[P_RESISTANCE].toInt());
+      if ( (ecoPVStats[P_EXP].toInt() > 0 && ecoPVStats[P_ROUTED].toInt() == 0)  ||
+       (temp >= tempmax + hysteresis) ||
+       (ecoPVStats[P_EXP].toInt() > lim ) )
+        outputfull = ON;
+    }
   },
   nullptr, true);
 
@@ -1173,9 +1190,6 @@ bool serialProcess(void)
       // temperature
       temp = ecoPVStats[TEMP].toInt();
 
-      //cas plus de routage avec export positif (température chauffe eau atteinte)
-      if (outputfull == OFF && ecoPVStats[P_EXP].toInt() > 0 && ecoPVStats[P_ROUTED].toInt() == 0 && ecoPVStats[TRIAC_MODE].toInt() == AUTOM)
-        outputfull = ON;
     }
 
     else if (incomingData.startsWith(F("PARAM")))

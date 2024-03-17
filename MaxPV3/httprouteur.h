@@ -10,8 +10,7 @@
 #define DIMMER_URL_STATE "/state"
 
 #define DIMMER_POW_HYSTERESIS 1 // Marge en % pour laquelle la puissance du dimmer n'est pas modifiée
-#define DIMMER_CHECK 60         // Verification Ping DIMMER toutes les XX appels
-#define DIMMER_COMPUTE 8        // Maj fonctionnment automatique tous les DIMMER_COMPUTE appels 
+#define DIMMER_CHECK 60         // Verification Ping DIMMER toutes les XX appels 
 #define DIMMERTRY 15             // borne tentatives appel Dimmer
 #define DMARGIN 30		          // Consigne de régulation Dimmer
 
@@ -23,8 +22,9 @@ extern int dimmer_pow;                 // puissance dimmer
 extern short dimmer_act;               // mode dimmer
 extern short dimmer_count;             // compteur utilisé pour ping
 extern short dimmer_sumpourcent ;      // somme des pourcentages de fonctionnement max sur tous les dimmers
-extern int dimmer_sumpow ;             // somme des puissances sur tous les dimmers
-extern int dimmerwattsec ;                     //Energie cumulée toutes les secondes 
+extern short dimmer_sumpow ;             // somme des puissances sur tous les dimmers
+extern int dimmerwattsec ;   
+extern short dimmer_period ;             //Période activité en secondes 
 
 extern String ecoPVConfig[];
 extern WiFiClient tcpClient;

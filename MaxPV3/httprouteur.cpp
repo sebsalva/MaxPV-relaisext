@@ -8,7 +8,8 @@ int dimmer_pow = 0;                   // puissance dimmer
 short dimmer_act = OFF;               // mode Routeur HTTP
 short dimmer_count = 0;               // compteur utilisé pour ping si pas d'autre appel HTTP
 short dimmer_sumpourcent = 100;       // somme des porcentages de fonctionnement max sur tous les dimmers
-int dimmer_sumpow = 1000;             // somme des puissances sur tous les dimmers
+short dimmer_sumpow = 1000;             // somme des puissances sur tous les dimmers
+short dimmer_period = 8 ;               //Période activité en secondes 
 short dimmer_compute = 0;
 short dimmer_try = 0;                 // compteur nb tentatives appel dimmer
 int dimmerwattsec = 0;                // compteur Energie Dimmer
@@ -21,7 +22,8 @@ short dimmer_engine() {
   int curpower = ecoPVStats[P_ACT].toInt();
 
   //Ping dimmer
-  if ( (dimmer_m != OFF ) && (dimmer_count >= DIMMER_CHECK)) {
+  //  dimmer_m != OFF
+  if ( (dimmer_act == ON) && (dimmer_count >= DIMMER_CHECK)) {
     dimmer_count = 0;
     tcpClient.println(F("Ping Routeur HTTP"));
     String url = F("http://") + dimmer_ip2 + F(DIMMER_URL_STATE);
@@ -60,7 +62,7 @@ short dimmer_engine() {
   {
     // calcul Energie routée par dimmer en supposant appel toutes les secondes.
     dimmerwattsec = dimmerwattsec + dimmer_pow;
-    if (dimmer_compute >= DIMMER_COMPUTE) {    // calcul toutes les XX secondes
+    if (dimmer_compute >= dimmer_period) {    // calcul toutes les XX secondes
         //DEBUG
 #if defined (DEBUG_DIMMER)
     tcpClient.print(F("Routeur HTTP: "));
