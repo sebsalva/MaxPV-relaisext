@@ -2,7 +2,7 @@
 #define MAXPV_H
 
 #define DEBUG_DIMMER
-//#define DEBUG_SERIAL
+#define DEBUG_SERIAL
 //#define DEBUG_HTTPC
 #define MAXPV_FTP_SERVER
 
@@ -64,27 +64,27 @@
 
 // Communications
 #define TELNET_PORT 23     // Port Telnet
-#define HTTP_PORT 80 // Web server port
+#define HTTP_PORT 80       // Web server port
 #define SERIAL_BAUD 500000 // Vitesse de la liaison port série pour la connexion avec l'arduino
 #define SERIALTIMEOUT 100  // Timeout pour les interrogations sur liaison série en ms
 #define SERIAL_BUFFER 256  // Taille du buffer RX pour la connexion avec l'arduino (256 max)
 
 // Historisation des index
-#define HISTORY_INTERVAL 30  // Périodicité en minutes de l'enregistrement des index d'énergie pour l'historisation
+#define HISTORY_INTERVAL 240  // Périodicité en minutes de l'enregistrement des index d'énergie pour l'historisation
 // Valeurs permises : 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60, 120, 180, 240, 480
 #define HISTORY_RECORD  193  // Nombre de points dans l'historique
 // Attention à la taille totale de l'historique en mémoire
 // Et la capacité d'export en CSV
 
 
-#define MAXPV_VERSION "3.356"
-#define MAXPV_VERSION_FULL "MaxPV! 3.356"
-
+#define MAXPV_VERSION      "3.358"
+#define MAXPV_VERSION_FULL "MaxPV! 3.358"
 
 #define OFF 0
 #define ON 1
 #define STOP 0
 #define FORCE 1
+#define FORCE2 2
 #define AUTOM 9
 
 // ***********************************************************************************
@@ -94,7 +94,7 @@
 // définition de l'ordre des paramètres de configuration de EcoPV tels que transmis
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
 // on utilise la position 0 pour stocker la version
-#define NB_PARAM 22 // Nombre de paramètres transmis par EcoPV (22 = 21 + VERSION)
+#define NB_PARAM 23 // Nombre de paramètres transmis par EcoPV (23 = 22 + VERSION)
 #define ECOPV_VERSION 0
 #define V_CALIB 1
 #define P_CALIB 2
@@ -117,6 +117,8 @@
 #define S_Relay 19
 #define T_CALIB 20
 #define T_MAX 21
+#define P_LIMIT 22
+
 
 // définition de l'ordre des informations statistiques transmises par EcoPV
 // et de l'index de rangement dans le tableau de stockage (début à la position 1)
@@ -124,7 +126,7 @@
 // ATTENTION : dans le reste du programme les 4 index de début de journée sont ajoutés à la suite
 // pour les informations disponibles par l'API
 // ils doivent toujours être situés en toute fin de tableu
-#define NB_STATS 25     // Nombre d'informations statistiques transmis par EcoPV (24 = 23 + VERSION)
+#define NB_STATS 26     // Nombre d'informations statistiques transmis par EcoPV (24 = 23 + VERSION)
 #define NB_STATS_SUPP 4 // Nombre d'informations statistiques supplémentaires
 //#define ECOPV_VERSION 0
 #define V_RMS 1
@@ -151,12 +153,26 @@
 #define SAMPLES 22
 #define INDEXRELAYON 23
 #define TEMP 24
-#define INDEX_ROUTED_J 25
-#define INDEX_IMPORT_J 26
-#define INDEX_EXPORT_J 27
-#define INDEX_IMPULSION_J 28
+#define OUTPUTFULL 25
+#define INDEX_ROUTED_J 26
+#define INDEX_IMPORT_J 27
+#define INDEX_EXPORT_J 28
+#define INDEX_IMPULSION_J 29
 
 
-
-
+bool configRead(void);
+void configModeCallback(AsyncWiFiManager*);
+void saveConfigCallback(void);
+void configWrite(void);
+bool telnetDiscoverClient(void);
+void resetIndexEcoPV(void);
+void restartEcoPV(void);
+void formatEepromEcoPV(void);
+void rebootESP(void);
+void saveIndexEcoPV(void);
+void saveConfigEcoPV(void);
+void loadConfigEcoPV(void);
+void setParamEcoPV(String, String);
+void SetPVEcoPV(String);
+void SetTempEcoPV(String);
 #endif

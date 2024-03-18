@@ -64,12 +64,20 @@
 
 #define ACC_FORCE_ENERGY    false
 
-// *** ACC_FORCE_ENERGY peut être true ou false 
+// *** ACC_FORCE_ENERGY peut être true ou false
 //     false : le compteur d'énergie routée accumule uniquement l'énergie routée en cas
 //     de surplus de production PV
 //     true : le compteur d'énergie routée accumule l'énergie délivrée par le SSR
 //     en cas de routage d'excédent PV, en mode FORCE et en mode BOOST
 
+
+// ***********************************************************************************
+// ****************** Configuration du DIMMER HTTP UTILISE             ***************
+// ****************** SSR ou ROBODYN PWM                               ***************
+// ***********************************************************************************
+// si DIMMER HTTP mode PWM fonctionne en cumulé avec ROUTEUR SSR
+//sinon DIMMER HTTP mode SSR fonctionne uniquement si ROUTEUR SSR est stoppé
+#define DIMMER_IS_SSR    false
 
 // ***********************************************************************************
 // ******************        FIN DES OPTIONS DE COMPILATION            ***************
@@ -84,7 +92,7 @@
 // ****************************   Définitions générales   ****************************
 // ***********************************************************************************
 
-#define VERSION          "3.554"       // Version logicielle
+#define VERSION          "3.558"       // Version logicielle
 #define SERIAL_BAUD      500000       // Vitesse de la liaison port série
 #define SERIALTIMEOUT       100       // Timeout pour les interrogations sur liaison série en ms
 
@@ -95,6 +103,7 @@
 #define WH_PER_INC            5       // Nombre de Wh par incrément pour le stockage 3 compteurs d'énergie (Rout, Imp, Exp)
 
 #define BOOST_BURST_PERIOD  300       // Durée de la période du cycle PWM mode BOOST en secondes
+#define NB_HOURS            4         // Nb heures pour sauvegarde des index
 
 // ***********************************************************************************
 // ***************************   Définitions utilitaires   ***************************
@@ -188,7 +197,7 @@ int   PHASE_CALIB  =       13;        // Valeur de correction de la phase (retar
 // 32 = application d'une avance = temps de conversion ADC
 int   P_OFFSET     =      -15;        // Correction d'offset de la lecture de Pactive en Watt
 int   P_RESISTANCE =     2000;        // Valeur en Watt de la résistance contrôlée
-
+int   P_LIMIT      =     15;       // Energie Max. journalière à faire router
 // ************* Paramètres de régulation du routeur de puissance (valeurs par défaut)
 int   P_MARGIN     =       10;        // Cible de puissance importée en Watt
 int   GAIN_P       =        8;        // Gain proportionnel du correcteur
@@ -202,7 +211,7 @@ int   P_DIV2_IDLE   =     200;         // Puissance active importée en Watt qui
 byte  T_DIV2_ON     =       5;         // Durée minimale d'activation du délestage en minutes
 byte  T_DIV2_OFF    =       5;         // Durée minimale d'arrêt du délestage en minutes
 byte  T_DIV2_TC     =       1;         // Constante de temps de moyennage des puissance routées et active en minutes
-byte   A_DIV2_EXT   = 	    0;	       //module relais ext
+byte  A_DIV2_EXT    = 	    0;	       //module relais ext
 // NOTE : Il faut une condition d'hystérésis pour un bon fonctionnement :
 // P_DIV2_ACTIVE + P_DIV2_IDLE > à la puissance de la charge de délestage secondaire
 
@@ -213,11 +222,10 @@ float CNT_CALIB     =       1.0;       // En Wh par impulsion externe
 int   P_INSTALLPV   =    3000;         // Valeur en Wc de la puissance de l'installation PV | production max (valeur par défaut)
 
 // ************* Etats SSR et Relais (valeurs par défaut)
-byte   S_SSR         =     AUTOM;         // sauvegarde etat Automatique par défaut
-byte   S_Relay       =     AUTOM;         // sauvegarde etat Automatique par défaut
-
-int    T_CALIB     =       0;             // Calibration Température
-unsigned int T_MAX =       55;            // Température Max
+byte   S_SSR         =     AUTOM;      // sauvegarde etat Automatique par défaut
+byte   S_Relay       =     AUTOM;      // sauvegarde etat Automatique par défaut
+int    T_CALIB       =     0;          // Calibration Température
+int    T_MAX         =     55;         // Température Max
 
 // ***********************************************************************************************************************
 // energyToDelay [ ] = Tableau du retard de déclenchement du SSR/TRIAC en fonction du routage de puissance désiré.
@@ -256,7 +264,7 @@ byte energyToDelay [ ] = {
 // ***********************************************************************************
 // *********  Définition de la structure de la configuration du routeur     **********
 // ***********************************************************************************
-#define NB_PARAM           21          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
+#define NB_PARAM           22          // Nombre de paramètres dans la configuration, 14 en EEPROM V1, 16 en V2; +3 relay ext et 2 sauvegarde états
 
 struct paramInConfig {                  // Structure pour la manipulation des données de configuration
   byte dataType;                        // 0 : int, 1 : float, 4 : byte
@@ -287,8 +295,9 @@ const paramInConfig pvrParamConfig [ ] = {
   { 0,      100,   30000,   &P_INSTALLPV    },       // P_INSTALLPV
   { 4,        0,      10,   &S_SSR          },       // S_SSR sauvegarde
   { 4,        0,      10,   &S_Relay        },       // S_Relay sauvegarde
-  { 0,        -20,    20,   &T_CALIB        },        // T_CALIB
-  { 0,        15,     90,   &T_MAX          }          // T_MAX
+  { 0,        -20,    20,   &T_CALIB        },       // T_CALIB
+  { 0,        15,     90,   &T_MAX          },        // T_MAX
+  { 0,        0,      90,   &P_LIMIT        }         // P_LIMIT
 };
 
 // ***********************************************************************************
@@ -351,6 +360,7 @@ volatile byte          stats_ready_flag   = 0;
 // 0 = Données traitées par la loop (), en attente de nouvelles données
 // 1 = Nouvelles données disponibles ou en cours de traitement par la loop ()
 // 9 = Données statistiques en cours de transfert
+unsigned short         nb_hours           = 0;   // compteur pour sauvegarde
 
 // ***********************************************************************************
 // ************* Variables globales utilisées pour les statistiques      *************
@@ -361,6 +371,7 @@ volatile byte          stats_ready_flag   = 0;
 // ***********************************************************************************
 float                  VCC_1BIT         = 0.0049;   // valeur du bit de l'ADC sous Vcc = 5 V
 long                   indexRouted      = 0;        // compteur d'énergie en incrément
+long                   indexRoutedJ     = 0;
 long                   indexImported    = 0;        // compteur d'énergie en incrément
 long                   indexExported    = 0;        // compteur d'énergie en incrément
 long                   indexImpulsion   = 0;        // compteur d'impulsions externes
@@ -372,7 +383,7 @@ float                  Vrms             = 0;        // tension rms en V
 float                  Irms             = 0;        // courant rms en A
 float                  Papp             = 0;        // puissance apparente en VA
 float                  Pact             = 0;        // puissance active en Watts
-int                    Pimpulsion       = 0;        // puissance compteur impulsion en impulsion par heure
+int                    Pimpulsion       = -1;        // puissance compteur impulsion en impulsion par heure
 float                  cos_phi          = 0;        // cosinus phi
 
 byte                   secondsOnline    = 0;        // horloge interne
@@ -393,7 +404,7 @@ byte                   ledBlink         = 0;        // séquenceur de clignoteme
 byte                   triacMode        = AUTOM;    // mode de fonctionnement du triac/SSR
 byte                   relayMode        = AUTOM;    // mode de fonctionnement du relais secondaire de délestage
 
-bool                   hasRestarted     = false;    // flag indiquant que le routeur a redémarré                
+bool                   hasRestarted     = false;    // flag indiquant que le routeur a redémarré
 
 // ***********************************************************************************
 // ************* Variables pour la gestion du mode BOOST                 *************
@@ -443,8 +454,9 @@ struct dataEeprom {                         // Structure des données pour le st
   byte                  s_relay;
   int                   t_calib;
   int                   t_max;
+  int                   p_limit;
   // fin des données eeprom V2
-  // taille totale : 44 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat +2
+  // taille totale : 44 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat +2 +1
 };
 
 struct indexEeprom {
@@ -486,15 +498,16 @@ DallasTemperature ds(&oneWire);
 short previous_t = -1;
 #endif
 short temp = -1;
-unsigned short hysteresis = 1;      // hysteresis 
-bool temp_bool=OFF;                 // bool utilisé pour stocker passage au dessus température seuil + hysteresis 
-          
+short hysteresis = 1;               // hysteresis
+bool temp_bool = OFF;               // bool utilisé pour stocker passage au dessus température seuil + hysteresis
+
 // ***********************************************************************************
 // ****************** Définitions pour Etat Dimmer                     ***************
 // ***********************************************************************************
 byte dimmer_act = OFF;              // utilisé pour savoir si Dimmer est actif ou non
+long last_controlCommand;           // sauvegarde commande triac ; utilisé si Dimmer est en mode dimmer et pas SSR
 
-
+byte  outputfull = OFF;              // Verif si CE chargé par jour si ON -> TRIAC à OFF
 // ***********************************************************************************
 // **********************  FIN DES DEFINITIONS ET DECLARATIONS  **********************
 // ***********************************************************************************
@@ -547,7 +560,7 @@ void setup ( ) {
 #endif
 
 #if defined (Dallas)
-ds.begin(); 
+  ds.begin();
 #endif
 
   // Chargement de la configuration EEPROM si existante
@@ -607,6 +620,8 @@ void loop ( ) {
 
   long                 indexImpulsionTemp = 0;
   byte                 i = 0;
+  short		             lim = 0;
+  short                Pexp = 0;
 
   // *** Vérification perte longue de synchronisation secteur
   if ( ( millis ( ) - refTime ) > 2010 ) {
@@ -711,7 +726,7 @@ void loop ( ) {
       Div2_On_cnt = 0;
       Div2_Off_cnt = 0;
       digitalWrite ( relayPin, relayMode ); // Cas où le relais est en mode forcé STOP ou FORCE
-    }                                                          
+    }
 
     // *** Vérification de l'état du relais de délestage                  ***
     if ( A_DIV2_EXT == 0 && digitalRead ( relayPin ) == ON ) {
@@ -721,18 +736,18 @@ void loop ( ) {
     else stats_error_status &= B11111011;
 
 
-   // *** Correction de l'artefact de puissance routée maximale          ***
+    // *** Correction de l'artefact de puissance routée maximale          ***
     // *** obtenue si la charge pilotée par le SSR se déconnecte.         ***
     // *** But : amélioration du comptage de l'énergie routée.            ***
     // *** Remarque 1, Ca ne couvre pas tous les cas de figure.           ***
     // *** Remarque 2, on ne fait pas la correction pour le pilotage du   ***
     // *** relais de délestage pour éviter l'exportation.                 ***
-    
+
     if (Pimpulsion > 0) PestimatedProd = Pimpulsion * CNT_CALIB;
     else                PestimatedProd = P_INSTALLPV;
- 
+
     if ( ( stats_error_status & B00000010 )            // Routage maximum vers la résistance
-      && ( PestimatedProd + Pact <= P_RESISTANCE ) )   // Cas impossible : charge déconnectée
+         && ( PestimatedProd + Pact <= P_RESISTANCE ) )   // Cas impossible : charge déconnectée
       Prouted = 0;
 
     // *** Accumulation des énergies routée, importée, exportée           ***
@@ -745,6 +760,7 @@ void loop ( ) {
     if ( routedEnergy >= 0 )   { // On a accumulé (3600 * WH_PER_INC) J = WH_PER_INC Wh
       routedEnergy -= ( 3600.0 * WH_PER_INC );
       indexRouted ++;
+      indexRoutedJ ++;
     }
     if ( exportedEnergy >= 0 ) {
       exportedEnergy -= ( 3600.0 * WH_PER_INC );
@@ -758,7 +774,7 @@ void loop ( ) {
       relayOnSeconds -= 60;
       indexRelayOn ++;
     }
-    
+
 
     // *** Calcul des statistiques du déclenchement du TRIAC              ***
     OCR1A_avg /= OCR1A_cnt;
@@ -785,7 +801,8 @@ void loop ( ) {
     Serial.print ( F(",") );
     Serial.print ( ( ( Pact >= 0 ) ? Pact : 0 ), 1 );
     Serial.print ( F(",") );
-    Serial.print ( ( ( Pact <= 0 ) ? -Pact : 0 ), 1 );
+    Pexp = ( (Pact < 0) ? -Pact : 0 );
+    Serial.print ( Pexp, 1 );
     Serial.print ( F(",") );
     Serial.print ( ( Pact / Papp ), 4 );
     Serial.print ( F(",") );
@@ -803,7 +820,7 @@ void loop ( ) {
     Serial.print ( F(",") );
     Serial.print ( relayMode );
     Serial.print ( F(",") );
-    if ( ( OCR1A_min < 255 ) && ( triacMode == AUTOM ) ) {   
+    if ( ( OCR1A_min < 255 ) && ( triacMode == AUTOM ) ) {
       // Affichage si on est en mode SSR automatique et régime de régulation (exécent PV)
       Serial.print ( float ( OCR1A_min * 0.064 ), 2 );
       Serial.print ( F(",") );
@@ -843,10 +860,35 @@ void loop ( ) {
     Serial.print ( indexRelayOn );
     Serial.print ( F(",") );
     Serial.print ( temp );
+    Serial.print ( F(",") );
+    Serial.print ( outputfull );
     Serial.print ( F(",END#") );
 
     // *** Reset du Flag pour indiquer que les données ont été traitées   ***
     stats_ready_flag = 0;
+
+    // *** Vérification CE chargé
+    if ( triacMode == AUTOM && coldStart == 0 && outputfull == OFF ) {
+      //lim = max( 0, (P_INSTALLPV - (P_INSTALLPV * 20 / 100) - 150 - P_RESISTANCE) );
+      lim = max( 0, (P_INSTALLPV - P_RESISTANCE) - 150 );
+      //pas de routage et export
+      //if (Pexp > (5 * P_MARGIN) && Prouted == 0)
+      //  outputfull = 1;
+      //température dépasse seuil
+      if ( temp >= ( T_MAX + hysteresis ))
+        outputfull = 2;
+      //Prouted au max et export > P_INSTALLPV - P_RESISTANCE
+      if ( Prouted >= P_RESISTANCE && Pexp > lim )
+        outputfull = 3;
+      // idem avec Pimpulsion si recu
+      //lim = max( 0, (Pimpulsion - P_RESISTANCE) );
+      //if ( Pimpulsion > 0 && Prouted >= P_RESISTANCE && Pexp > lim )
+      if (indexRoutedJ * WH_PER_INC > P_LIMIT * 1000)
+        outputfull = 4;
+      //Serial.print( F("DONE:CE,"));
+      //Serial.print( outputfull);
+      //Serial.println(F(",END#"));
+    }
 
     // *** Initialisation des statistique OCR1A                           ***
     OCR1A_avg = 0;
@@ -888,6 +930,7 @@ void loop ( ) {
     refTime = millis ( );
   }
 
+
 }
 
 
@@ -906,7 +949,7 @@ void startPVR ( void ) {
   delay ( 10 );
   VCC_1BIT = ( 1.1 / analogReadReference ( ) );  // Calcul de la valeur en V d'un bit ADC
   delay ( 10 );
-  // dimmer est OFF 
+  // dimmer est OFF
   dimmer_act = OFF ;
   // arrêt du SSR par sécurité
   TRIAC_OFF;
@@ -1047,6 +1090,7 @@ void serialRequest ( void ) {
     else if ( incomingCommand.startsWith ( F("INDX0") ) ) {
       // Demande de mise à 0 des index
       indexRouted = 0;
+      indexRoutedJ = 0;
       indexExported = 0;
       indexImported = 0;
       noInterrupts ( );
@@ -1129,13 +1173,13 @@ void serialRequest ( void ) {
       if ( incomingCommand == F("STOP") )       relayMode = STOP;
       else if ( incomingCommand == F("FORCE") ) relayMode = FORCE;
       else if ( incomingCommand == F("AUTO") )  relayMode = AUTOM;
-      // Arrêt du mode relayPlus si il est en cours pour donner la priorité 
+      // Arrêt du mode relayPlus si il est en cours pour donner la priorité
       // au changement de mode relais
       if ( relayplusTime >= 0 ) {
-          relayplusTime = -1;
-          Serial.print ( F("RELAYPLUSTIME,-1,END") );
+        relayplusTime = -1;
+        Serial.print ( F("RELAYPLUSTIME,-1,END") );
       }
-      Serial.print ( F("DONE:SETRELAY,OK,") );     
+      Serial.print ( F("DONE:SETRELAY,OK,") );
       //sauvegarde etat
       byte *tmp = (byte *) pvrParamConfig [18].adr;
       noInterrupts ( );
@@ -1152,21 +1196,25 @@ void serialRequest ( void ) {
 
       if ( incomingCommand == F("STOP") )       triacMode = STOP;
       else if ( incomingCommand == F("FORCE") ) triacMode = FORCE;
+      else if ( incomingCommand == F("FORCE2") )triacMode = FORCE;
       else if ( incomingCommand == F("AUTO") )  triacMode = AUTOM;
-      // Arrêt du mode BOOST si il est en cours pour donner la priorité 
+      // Arrêt du mode BOOST si il est en cours pour donner la priorité
       // au changement de mode SSR
       if ( boostTime >= 0 ) {
-          boostTime = -1;
-          Serial.print ( F("BOOSTTIME,-1,END") );
+        boostTime = -1;
+        Serial.print ( F("BOOSTTIME,-1,END") );
       }
       Serial.print ( F("DONE:SETSSR,OK,") );
       //sauvegarde etat
-      byte *tmp = (byte *) pvrParamConfig [17].adr;
-      noInterrupts ( );
-      *tmp = triacMode ;
-      eeConfigWrite ( );
-      interrupts ( );
-      Serial.print ( F("DONE:SAVECFG,OK,") );
+      if ( incomingCommand != F("FORCE2") )
+      {
+        byte *tmp = (byte *) pvrParamConfig [17].adr;
+        noInterrupts ( );
+        *tmp = triacMode ;
+        eeConfigWrite ( );
+        interrupts ( );
+        Serial.print ( F("DONE:SAVECFG,OK,") );
+      }
     }
     else if ( incomingCommand.startsWith ( F("SETDIM") ) ) {
       //reception Etat Dimmer HTTP
@@ -1174,6 +1222,11 @@ void serialRequest ( void ) {
       incomingCommand.replace ( F(",END"), "" );
       if ( incomingCommand == F("ON") )       dimmer_act  = ON;
       else if ( incomingCommand == F("OFF") ) dimmer_act = OFF;
+      Serial.print ( F("DONE:SETDIM,") );
+      if (dimmer_act == ON) Serial.print (F("ON"));
+      if (dimmer_act == OFF) Serial.print (F("OFF"));
+      Serial.print ( F(",OK,") );
+
     }
     else if ( incomingCommand.startsWith ( F("SETBOOST") ) ) {
       int index = 0;
@@ -1211,7 +1264,18 @@ void serialRequest ( void ) {
       interrupts ( );
       Serial.print ( F("DONE:SAVECFG,OK,") );
     }
-
+    else if ( incomingCommand.startsWith ( F("SETPV") ) ) {
+      incomingCommand.replace ( F("SETPV,"), "" );
+      incomingCommand.replace ( F(",END"), "" );
+      Pimpulsion = incomingCommand.toInt ( );
+      Serial.print ( F("DONE:SETPV,OK,") );
+    }
+    else if ( incomingCommand.startsWith ( F("SETTEMP") ) ) {
+      incomingCommand.replace ( F("SETTEMP,"), "" );
+      incomingCommand.replace ( F(",END"), "" );
+      temp = incomingCommand.toInt ( );
+      Serial.print ( F("DONE:SETTEMP,OK,") );
+    }
     else Serial.print ( F("UNKNOWN COMMAND,") );
   }
   else Serial.print ( F("ERROR?,") );
@@ -1281,6 +1345,7 @@ bool eeConfigRead ( void ) {
     S_Relay       = pvrConfig.s_relay; //sauvegarde etat
     T_CALIB       = pvrConfig.t_calib; // Calibration Température
     T_MAX         = pvrConfig.t_max; // Température Max
+    P_LIMIT       = pvrConfig.p_limit; // Energie Max à router
 
     return true;
   }
@@ -1317,6 +1382,7 @@ void eeConfigWrite ( void ) {
   pvrConfig.s_relay         = S_Relay ; //sauvegarde etat
   pvrConfig.t_calib         = T_CALIB ; // Temp calib
   pvrConfig.t_max           = T_MAX ; // Temp Max
+  pvrConfig.p_limit         = P_LIMIT ;
   EEPROM.put ( PVR_EEPROM_START, pvrConfig );
 }
 
@@ -1345,11 +1411,12 @@ void indexRead ( void ) {
 ///////////////////////////////////////////////////////////////////////////////////////
 void indexWrite ( void ) {
 
+  nb_hours = 0;
   indexEeprom indexTable;
   indexTable.routed = indexRouted;
   indexTable.imported = indexImported;
   indexTable.exported = indexExported;
-  indexTable.relayon = indexRelayOn; 
+  indexTable.relayon = indexRelayOn;
   noInterrupts ( );
   indexTable.impulsion = indexImpulsion;
   interrupts ( );
@@ -1388,9 +1455,14 @@ void PVRScheduler ( void ) {
   static bool           impulsionFlag = false;
   unsigned long         deltaTimeImpulsion_tmp = 0;
 
-  //*** Toutes les heures : Enregistrement des index en mémoire EEPROM  ***
-  if ( ( minutesOnline == 0 ) && ( secondsOnline == 0 ) ) indexWrite ( );
+  //*** Tous les jours   ***
+  if ( ( minutesOnline == 0 ) && ( hoursOnline == 0 )  ) {
+    indexRoutedJ = 0;
+    outputfull = OFF;
+  }
 
+  //*** Toutes les heures : Enregistrement des index en mémoire EEPROM  ***
+  if ( ( minutesOnline == 0 ) && ( secondsOnline == 0 ) && ( nb_hours == NB_HOURS ) ) indexWrite ( );
   // *** Affichage des donnéees statistiques sur écran oled si activé   ***
   // *** Période d'envoi définie par OLED_128X64_REFRESH_PERIOD         ***
   // *** Envoi page 0 à la 2ème seconde de l'intervalle de temps        ***
@@ -1419,7 +1491,7 @@ void PVRScheduler ( void ) {
 
 
 #if defined (Dallas)
-if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
+  if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
 #endif
 
   //*** Toutes les 2 secondes : Calcul de la puissance relative à la mesure d'impulsion  ***
@@ -1430,7 +1502,7 @@ if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
     interrupts ( );
     if ( secondsOnline == 8 ) {    // une fois par minute, on teste l'absence d'impulsions
       if ( deltaTimeImpulsion_tmp == lastMinuteDeltaTimeImpulsion ) {
-        Pimpulsion = -1;
+        //Pimpulsion = -1;
         impulsionFlag = false;
       }
       lastMinuteDeltaTimeImpulsion = deltaTimeImpulsion_tmp;
@@ -1445,7 +1517,7 @@ if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
   //*** Toutes les secondes : Traitement du mode BOOST
   if (boostTime == 0) {
     boostTime--;
-    triacMode = AUTOM;
+    triacMode = AUTOM; //a voir
     // Envoi immédiat de la fin du mode Boost
     Serial.print ( F("BOOSTTIME,-1,END") );
   }
@@ -1468,6 +1540,7 @@ if (( secondsOnline % Dallas_REFRESH_PERIOD ) == 0 ) readTemp ( );
     relayplusTime--;
     relayMode = FORCE;
   }
+
 }
 
 
@@ -1490,7 +1563,7 @@ void PVRLed ( void ) {
     digitalWrite ( ledPinRouting, ( ( ledBlink & B00001000 ) == 0 ) ? 0 : 1 ); // T = 320 ms
   }
 
-  if ( errorByte == 0 ) {          // pas d'ereur
+  if ( errorByte == 0 ) {          // pas d'erreur
     digitalWrite ( ledPinStatus, ( ( ledBlink & B01000000 ) == 0 ) ? 0 : 1 ); // T = 2560 ms
   }
   else if ( errorByte < 64 ) {     // anomalie sur les signaux analogiques ou le taux d'acquisition
@@ -1709,7 +1782,6 @@ void configTimer2 ( void ) {
 // Temps mesuré de traitement de l'interruption : entre 36 et 40 us  //
 ///////////////////////////////////////////////////////////////////////
 void zeroCrossingInterrupt ( void ) {
-
 #define ERROR_BIT_SHIFT        6        // Valeur de décimation des données pour le calcul de la régulation PI
 #define COMMAND_BIT_SHIFT     14        // Valeur de décimation pour la commande de puissance
 
@@ -1766,7 +1838,7 @@ void zeroCrossingInterrupt ( void ) {
     // *** PASSAGE PAR ZERO DETECTE - ON A TERMINE UNE DEMI PERIODE ***
     // gestion de l'antirebond du passage à 0 en calculant de temps
     // entre 2 passages à 0 qui doivent être séparés de 8 ms au moins
-    
+
     // TRIAC FORCE et Temperature_test
     if ( triacMode == FORCE && (temp <= T_MAX - hysteresis) ) TRIAC_ON; else TRIAC_OFF;
     TCCR1B = 0x00;                        // arrêt du Timer par sécurité
@@ -1795,13 +1867,22 @@ void zeroCrossingInterrupt ( void ) {
 
     // on calcule la commande à appliquer (correction PI)
     // note : lissage de l'erreur sur 2 périodes pour l'action proportionnelle pour corriger le bruit systématique
-    
+
     //dimmer
+    //dimmerHTTP se déclenche ssi SSR est au max si controlCommand >255
+    //controlCommand devrait diminuer ssi dimmer est inactif -> mais perte de réactivité ? à tester
+    //if ( !DIMMER_IS_SSR && dimmer_act == ON )
+    //{
+    //  controlCommand = last_controlCommand;
+    //  }
+    //  else{
     controlCommand = long ( GAIN_I ) * controlIntegral + long ( GAIN_P ) * ( controlError + lastControlError );
+    //last_controlCommand = controlCommand;
+    //    }
+
 
     // application du gain fixe de normalisation : réduction de COMMAND_BIT_SHIFT bits
     controlCommand = controlCommand >> COMMAND_BIT_SHIFT;
-    //dimmer	
     if ( controlCommand <= 0 ) {                                // équilibre ou importation, donc pas de routage de puissance
       TCCR1B = 0;                                               // arrêt du Timer = inhibition du déclenchement du triac pour cette période
       TCNT1  = 0;                                               // compteur à 0
@@ -1824,16 +1905,18 @@ void zeroCrossingInterrupt ( void ) {
 
     // si on n'est pas en mode automatique, on gèle la commande routage (==> arrêt Timer et pas d'accumulation de puissance routée)
     // mais on a quand même fait auparavant les calculs de régulation
-    //ajout Temperature_test
-    // ajout Dimmer test : si actif ecopv est OFF
-    if ( temp >= T_MAX + hysteresis ) temp_bool=ON;
-    if ( temp <= T_MAX - hysteresis ) temp_bool=OFF;
-    if ( (triacMode == STOP) || temp_bool || (dimmer_act == ON) ) {
+    // ajout Temperature test
+    // ajout limite injection
+    // ajout Test Dimmer : si dimmer mode SSR et actif alors on eteind ecopv (les 2 sont incompatibles)
+    //if ( temp >= T_MAX + hysteresis ) temp_bool = ON;
+    //if ( temp <= T_MAX - hysteresis ) temp_bool = OFF;
+    if ( (triacMode == STOP) || (DIMMER_IS_SSR && dimmer_act == ON) || (outputfull != OFF) )
+    {
       TCCR1B = 0;
       TCNT1  = 0;
       controlCommand = 0;
     }
-    else if ( triacMode == FORCE ) {
+    if ( triacMode == FORCE ) {
       TCCR1B = 0;
       TCNT1  = 0;
       controlCommand = 255;
@@ -2100,7 +2183,7 @@ void pulseExternalInterrupt ( void ) {
 
   if ( ( TCNT2 == 0 ) && ( TCCR2B == 0 ) ) TCCR2B = 0x07;        // si Timer2 est arrêté on lance le Timer2 pour la vérification de la validité du pulse
   else {                                                         // on stoppe la vérification en cours car de manière évidente le précédent pulse n'était pas valide
-                                                                 // et on redémarre la vérification pour la nouvelle détection
+    // et on redémarre la vérification pour la nouvelle détection
     TCCR2B = 0x00;              // arrêt du Timer
     TCNT2 = 0;                  // on remet le compteur à 0
     TCCR2B = 0x07;              // on redémarre le Timer
@@ -2111,15 +2194,17 @@ void pulseExternalInterrupt ( void ) {
 // lecture température                                               //
 // Capteur Dallas                                                    //
 ///////////////////////////////////////////////////////////////////////
+#if defined (Dallas)
 void readTemp()
 {
-ds.requestTemperatures();
-short t = ds.getTempCByIndex(0);
-if (t<0 or t> 90)  {
-  temp=previous_t;
+  ds.requestTemperatures();
+  short t = ds.getTempCByIndex(0);
+  if (t<0 or t> 90)  {
+    temp = previous_t;
+  }
+  else {
+    previous_t = temp;
+    temp = t + T_CALIB;
+  }
 }
-else {
-  previous_t=temp;
-  temp=t+T_CALIB;
-}
-}
+#endif

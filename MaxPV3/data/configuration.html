@@ -32,6 +32,10 @@
                 de configuration</a> </li>
             <li class="nav-item"> <a class="nav-link active" aria-current="page"
                 href="configuration.html">Configuration Routeur SSR</a> </li>
+            <li class="nav-item"> <a class="nav-link"
+                href="boost.html">Configuration Mode Boost</a>
+            </li>
+
             <li class="nav-item"> <a class="nav-link" href="admin.html">Configuration Web</a>
             </li>
             <li class="nav-item"> <a class="nav-link" href="maj.html">Update</a>
@@ -85,6 +89,13 @@
               <td scope="col"><input class="form-control text-center" id="cnt_calib"
                   type="text"></td>
               <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('cnt_calib', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>P_LIMIT</b><br>
+                Sécurité: Energie Max. à router journalière (kWh) </td>
+              <td scope="col"><input class="form-control text-center" id="p_limit"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('p_limit', this)">Envoyer</button></td>
             </tr>
           </tbody>
           <thead>
@@ -156,12 +167,26 @@
                   type="text"></td>
               <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('e_reserve', this)">Envoyer</button></td>
             </tr>
+            </tbody>
+            <thead>
+            <tr class="table-primary">
+              <th colspan="3">Température (Capteur)</th>
+            </tr>
+            </thead>
+            <tbody>
             <tr>
               <td scope="row"><b>T_CALIB</b><br>
                 Calibration Capteur Température (°C)</td>
               <td scope="col"><input class="form-control text-center" id="t_calib"
                   type="text"></td>
               <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('t_calib', this)">Envoyer</button></td>
+            </tr>
+            <tr>
+              <td scope="row"><b>T_MAX</b><br>
+                Température Maximale (°C)</td>
+              <td scope="col"><input class="form-control text-center" id="t_max"
+                  type="text"></td>
+              <td scope="col"><button class="btn btn-primary" type="submit" onclick="sendParam ('t_max', this)">Envoyer</button></td>
             </tr>
           </tbody>
           <thead>
@@ -244,11 +269,11 @@
       </div>
     </main>
     <script>
-    const nb_param = 21;
+    const nb_param = 22;
     const paramList = ["FAKE", "v_calib", "p_calib", "phase_calib", "p_offset",
       "p_resistance", "p_margin", "gain_p", "gain_i",
       "e_reserve", "p_div2_active", "p_div2_idle", "t_div2_on",
-      "t_div2_off", "t_div2_tc", "r_ext", "cnt_calib", "p_installpv", "e_ssr", "e_relay", "t_calib","t_max"];
+      "t_div2_off", "t_div2_tc", "r_ext", "cnt_calib", "p_installpv", "e_ssr", "e_relay", "t_calib","t_max","p_limit"];
       
       
     const alert = (message, type, eleId) => {

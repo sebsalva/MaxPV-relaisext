@@ -37,6 +37,9 @@
           <li class="nav-item">
             <a class="nav-link" href="configuration.html">Configuration Routeur SSR</a>
           </li>
+          <li class="nav-item"> <a class="nav-link"
+                href="boost.html">Configuration Mode Boost</a>
+            </li>
           <li class="nav-item">
             <a class="nav-link" href="admin.html">Configuration Web</a>
           </li>
@@ -355,10 +358,10 @@
           document.getElementById("ontime").innerHTML = config[20];
           document.getElementById("sample").innerHTML = config[21];
           document.getElementById("temperature").innerHTML = config[23];
-          document.getElementById("indexroutedJ").innerHTML = (parseFloat( config[8] ) - parseFloat( config[24]) ).toFixed(3).toString();
-          document.getElementById("indeximportJ").innerHTML = (parseFloat( config[9] ) - parseFloat( config[25]) ).toFixed(3).toString();
-          document.getElementById("indexexportJ").innerHTML = (parseFloat( config[10] ) - parseFloat( config[26]) ).toFixed(3).toString();
-          document.getElementById("indeximpulsionJ").innerHTML = (parseFloat( config[11] ) - parseFloat( config[27]) ).toFixed(3).toString();
+          document.getElementById("indexroutedJ").innerHTML = (parseFloat( config[8] ) - parseFloat( config[25]) ).toFixed(3).toString();
+          document.getElementById("indeximportJ").innerHTML = (parseFloat( config[9] ) - parseFloat( config[26]) ).toFixed(3).toString();
+          document.getElementById("indexexportJ").innerHTML = (parseFloat( config[10] ) - parseFloat( config[27]) ).toFixed(3).toString();
+          document.getElementById("indeximpulsionJ").innerHTML = (parseFloat( config[11] ) - parseFloat( config[28]) ).toFixed(3).toString();
         }
       };
       xhttp1.open("GET", "api/get?alldata", true);

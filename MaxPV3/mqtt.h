@@ -13,46 +13,49 @@
 #define DEFAULT_MQTT_PUBLISH_PERIOD   10     // en secondes, intervalle de publication MQTT
 
 // Définition des channels MQTT
-#define MQTT_STATE         "maxpv/state"
-#define MQTT_V_RMS         "maxpv/vrms"
-#define MQTT_I_RMS         "maxpv/irms"
-#define MQTT_P_ACT         "maxpv/pact"
-#define MQTT_P_APP         "maxpv/papp"
-#define MQTT_P_ROUTED      "maxpv/prouted"
-#define MQTT_P_ROUTED2      "maxpv/prouted2"
-#define MQTT_P_EXPORT      "maxpv/pexport"
-#define MQTT_P_IMPULSION   "maxpv/pimpulsion"
-#define MQTT_COS_PHI       "maxpv/cosphi"
-#define MQTT_INDEX_ROUTED       "maxpv/indexrouted"
-#define MQTT_INDEX_ROUTED2       "maxpv/indexrouted2"
-#define MQTT_INDEX_IMPORT       "maxpv/indeximport"
-#define MQTT_INDEX_EXPORT       "maxpv/indexexport"
-#define MQTT_INDEX_IMPULSION    "maxpv/indeximpulsion"
-#define MQTT_TRIAC_MODE    "maxpv/triacmode"
-#define MQTT_SET_TRIAC_MODE    "maxpv/triacmode/set"
-#define MQTT_RELAY_MODE    "maxpv/relaymode"
-#define MQTT_SET_RELAY_MODE    "maxpv/relaymode/set"
-#define MQTT_DIMMER_MODE    "maxpv/dimmermode"
-#define MQTT_SET_DIMMER_MODE    "maxpv/dimmermode/set"
-#define MQTT_BOOST_MODE      "maxpv/boost"
-#define MQTT_SET_BOOST_MODE  "maxpv/boost/set"
-#define MQTT_STATUS_BYTE   "maxpv/statusbyte"
-#define MQTT_TEMP   "maxpv/temperature"
-
+#define MQTT_STATE            "maxpv/state"
+#define MQTT_V_RMS            "maxpv/vrms"
+#define MQTT_I_RMS            "maxpv/irms"
+#define MQTT_P_ACT            "maxpv/pact"
+#define MQTT_P_APP            "maxpv/papp"
+#define MQTT_P_ROUTED         "maxpv/prouted"
+#define MQTT_P_ROUTED2        "maxpv/prouted2"
+#define MQTT_P_EXPORT         "maxpv/pexport"
+#define MQTT_P_IMPULSION      "maxpv/pimpulsion"
+#define MQTT_COS_PHI          "maxpv/cosphi"
+#define MQTT_INDEX_ROUTED     "maxpv/indexrouted"
+#define MQTT_INDEX_ROUTED2    "maxpv/indexrouted2"
+#define MQTT_INDEX_IMPORT     "maxpv/indeximport"
+#define MQTT_INDEX_EXPORT     "maxpv/indexexport"
+#define MQTT_INDEX_IMPULSION  "maxpv/indeximpulsion"
+#define MQTT_TRIAC_MODE       "maxpv/triacmode"
+#define MQTT_SET_TRIAC_MODE   "maxpv/triacmode/set"
+#define MQTT_RELAY_MODE       "maxpv/relaymode"
+#define MQTT_SET_RELAY_MODE   "maxpv/relaymode/set"
+#define MQTT_DIMMER_MODE      "maxpv/dimmermode"
+#define MQTT_SET_DIMMER_MODE  "maxpv/dimmermode/set"
+#define MQTT_BOOST_MODE       "maxpv/boost"
+#define MQTT_SET_BOOST_MODE   "maxpv/boost/set"
+#define MQTT_STATUS_BYTE      "maxpv/statusbyte"
+#define MQTT_TEMP             "maxpv/temperature"
+#define MQTT_SET_TEMP         "maxpv/settemperature"
+#define MQTT_SET_PV           "shellies/shellyem-34945470F5B8/emeter/0/power"
 
 // Variables Configuration de MQTT
 String mqttIP;                                      // IP du serveur MQTT
 String mqttUser;                                    // Utilisateur du serveur MQTT - Optionnel : si vide, pas d'authentification
 String mqttPass;                                    // Mot de passe du serveur MQTT
 uint16_t mqttPort   = DEFAULT_MQTT_PORT;            // Port du serveur MQTT
-int mqttPeriod      = DEFAULT_MQTT_PUBLISH_PERIOD;  // Période de transmission en secondes
+short mqttPeriod      = DEFAULT_MQTT_PUBLISH_PERIOD;  // Période de transmission en secondes
 short mqttActive    = OFF;
 short mqttDet       = OFF;
+
+extern int powerpv;                                 // Puiss. PV reçue par MQTT
+//extern short temp;
 
 AsyncMqttClient mqttClient;
 // Définition tâches de Ticker
 Ticker mqttReconnectTimer;
-
 
 extern void relayModeEcoPV(byte);
 extern void SSRModeEcoPV(byte );
@@ -68,11 +71,13 @@ extern bool shouldCheckMQTT ;
 
 void onMqttConnect(bool sessionPresent)
 {
-  // Souscriptions aux topics pour gérer les états relais, SSR et boost
+  // Souscriptions aux topics pour gérer les états relais, SSR, boost, température et Puiss. PV
   mqttClient.subscribe(MQTT_SET_RELAY_MODE, 0);
   mqttClient.subscribe(MQTT_SET_TRIAC_MODE, 0);
   mqttClient.subscribe(MQTT_SET_DIMMER_MODE, 0);
   mqttClient.subscribe(MQTT_SET_BOOST_MODE, 0);
+  mqttClient.subscribe(MQTT_SET_TEMP, 0);
+  mqttClient.subscribe(MQTT_SET_PV, 0);
 
   // Publication du status
   mqttClient.publish(MQTT_STATE, 0, true, "connected");
@@ -169,10 +174,12 @@ void onMqttConnect(bool sessionPresent)
     payload = configPayloadTemplate;
     payload.replace(F("#SENSORID#"), F("FacteurPuissance"));
     payload.replace(F("#SENSORNAME#"), F("Facteur de puissance"));
-    payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+    //payload.replace(F("\"dev_cla\":\"#DEVICECLASS#\","), F(""));
+    payload.replace(F("#DEVICECLASS#"), F("power_factor"));
     payload.replace(F("#STATECLASS#"), F("measurement"));
     payload.replace(F("#STATETOPIC#"), F(MQTT_COS_PHI));
-    payload.replace(F("#UNIT#"), "");
+    //payload.replace(F("#UNIT#"), "");
+    payload.replace(F("\"unit_of_meas\":\"#UNIT#\""), "");
     mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
   }
 
@@ -185,7 +192,8 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#SENSORID#"), F("Import_P"));
   payload.replace(F("#SENSORNAME#"), F("Import_P"));
   payload.replace(F("#DEVICECLASS#"), F("power"));
-  payload.replace(F("#STATECLASS#"), F("measurement"));  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
+  payload.replace(F("#STATECLASS#"), F("measurement"));  
+  payload.replace(F("#STATETOPIC#"), F(MQTT_P_ACT));
   payload.replace(F("#UNIT#"), F("W"));
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
@@ -414,6 +422,8 @@ void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessagePrope
                    const size_t& len, const size_t& index, const size_t& total)
 {
   char tmp[6];
+  short t=0;
+  
   // A la réception d'un message sur un des topics en écoute
   // on vérifie le topic concerné et la commande reçue
   if (String(topic).startsWith(F(MQTT_SET_RELAY_MODE))) {
@@ -430,22 +440,29 @@ void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessagePrope
     if ( String(payload).startsWith(F("stop")) ) dimmer_m = STOP;
     else if ( String(payload).startsWith(F("force")) ) dimmer_m = FORCE;
     else if ( String(payload).startsWith(F("auto")) ) dimmer_m = AUTOM;
-
     // dimmer
     if (dimmer_m == OFF) strcpy(tmp, "stop");
     else if (dimmer_m == FORCE) strcpy(tmp, "force"); else strcpy(tmp, "auto");
     if (mqttClient.connected ()) mqttClient.publish(MQTT_DIMMER_MODE, 0, true, tmp);
-
-
     //if (mqttClient.connected ()) mqttClient.publish(MQTT_DIMMER_MODE, 0, true, payload);
   }
   else if (String(topic).startsWith(F(MQTT_SET_BOOST_MODE))) {
     if ( String(payload).startsWith(F("on")) ) boostON ( );
     else if ( String(payload).startsWith(F("off")) ) boostOFF ( );
   }
+   else if (String(topic).startsWith(F(MQTT_SET_PV))) {
+    t = atoi(payload);
+    if (t > 0) powerpv = t;
+    else powerpv = 0; 
+    ecoPVConfig[P_IMPULSION] = String(powerpv);
+    SetPVEcoPV(ecoPVConfig[P_IMPULSION]) ;
+   }
+    else if (String(topic).startsWith(F(MQTT_SET_TEMP))) {
+    t = atoi(payload);
+    if (t > 0 && t < 100)  SetTempEcoPV(String(t));    
+   
+   }  
 }
-
-
 
 void mqttTransmit(void)
 {
@@ -456,19 +473,13 @@ void mqttTransmit(void)
   if (mqttClient.connected ()) {          // On vérifie si on est connecté
     if (mqttDet == ON)        //transmission détaillée
     {
-      ecoPVStats[V_RMS].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_V_RMS, 0, true, buf);
-      ecoPVStats[I_RMS].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_I_RMS, 0, true, buf);
-      ecoPVStats[P_APP].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_P_APP, 0, true, buf);
-      ecoPVStats[COS_PHI].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_COS_PHI, 0, true, buf);
-      ecoPVStats[STATUS_BYTE].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_STATUS_BYTE, 0, true, buf);
+      mqttClient.publish(MQTT_V_RMS, 0, true, ecoPVStats[V_RMS].c_str());
+      mqttClient.publish(MQTT_I_RMS, 0, true, ecoPVStats[I_RMS].c_str());
+      mqttClient.publish(MQTT_P_APP, 0, true, ecoPVStats[P_APP].c_str());
+      mqttClient.publish(MQTT_COS_PHI, 0, true, ecoPVStats[COS_PHI].c_str());
+      mqttClient.publish(MQTT_STATUS_BYTE, 0, true, ecoPVStats[STATUS_BYTE].c_str());
     }
-    ecoPVStats[P_ACT].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_P_ACT, 0, true, buf);
+    mqttClient.publish(MQTT_P_ACT, 0, true, ecoPVStats[P_ACT].c_str());
     power = ecoPVStats[P_ACT].toInt();
     if (power < 0)  sprintf(tmp, "%d", -power);
     else  strcpy(tmp, "auto");
@@ -478,33 +489,25 @@ void mqttTransmit(void)
     sprintf(tmp, "%d", dimmer_pow);
     mqttClient.publish(MQTT_P_ROUTED2, 0, true, tmp);
     float f = 0.0;
-    if (dimmerwattsec > 0) 
-      f = (float)dimmerwattsec / (float)3600000;
-    sprintf(tmp, "%f", f);
+    sprintf(tmp, "%f", ((float)dimmer_index/1000.0));
     mqttClient.publish(MQTT_INDEX_ROUTED2, 0, true, tmp);
     //}
     //if (ecoPVStats[TRIAC_MODE].toInt() != STOP) {
-    ecoPVStats[P_ROUTED].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_P_ROUTED, 0, true, buf);
-    
+    mqttClient.publish(MQTT_P_ROUTED, 0, true, ecoPVStats[P_ROUTED].c_str());
+
     sprintf(tmp, "%f",  (ecoPVStats[INDEX_ROUTED].toFloat()));
     mqttClient.publish(MQTT_INDEX_ROUTED, 0, true, tmp);
     //}
     power  = ecoPVStats[P_IMPULSION].toInt();
     if (power >= 0) {
-      ecoPVStats[P_IMPULSION].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_P_IMPULSION, 0, true, buf);
-      ecoPVStats[INDEX_IMPULSION].toCharArray(buf, 16);
-      mqttClient.publish(MQTT_INDEX_IMPULSION, 0, true, buf);
+      mqttClient.publish(MQTT_P_IMPULSION, 0, true, ecoPVStats[P_IMPULSION].c_str());
+      mqttClient.publish(MQTT_INDEX_IMPULSION, 0, true, ecoPVStats[INDEX_IMPULSION].c_str());
     }
     yield ( );
 
-    ecoPVStats[INDEX_IMPORT].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_INDEX_IMPORT, 0, true, buf);
-    ecoPVStats[INDEX_EXPORT].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_INDEX_EXPORT, 0, true, buf);
-    ecoPVStats[TEMP].toCharArray(buf, 16);
-    mqttClient.publish(MQTT_TEMP, 0, true, buf);
+    mqttClient.publish(MQTT_INDEX_IMPORT, 0, true, ecoPVStats[INDEX_IMPORT].c_str());
+    mqttClient.publish(MQTT_INDEX_EXPORT, 0, true, ecoPVStats[INDEX_EXPORT].c_str());
+    mqttClient.publish(MQTT_TEMP, 0, true, ecoPVStats[TEMP].c_str());
     ecoPVStats[TRIAC_MODE].toCharArray(buf, 16);
     if (buf[0] == '0') strcpy(tmp, "stop");
     else if (buf[0] == '1') strcpy(tmp, "force"); else strcpy(tmp, "auto");

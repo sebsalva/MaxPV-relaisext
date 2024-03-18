@@ -30,6 +30,9 @@
             <li class="nav-item"> <a class="nav-link" href="wizard.html">Assistant
                 de configuration</a> </li>
             <li class="nav-item"> <a class="nav-link" href="configuration.html">Configuration Routeur SSR</a> </li>
+            <li class="nav-item"> <a class="nav-link"
+                href="boost.html">Configuration Mode Boost</a>
+            </li>
             <li class="nav-item"> <a class="nav-link active" aria-current="page"
                 href="admin.html">Configuration Web</a>
             </li>
@@ -43,7 +46,7 @@
     </nav>
     <main class="container-fluid">
       <div class="bg-light p-5 rounded">
-        <h1>Configuration Web, Relais HTTP, Routeur PV HTTP, Température</h1>
+        <h1>Configuration Web, Relais HTTP, Routeur HTTP</h1>
         <p class="lead"></p>
         <form id="formIPConfig" onsubmit="event.preventDefault();
                     saveConfigMaxPV ( );                    sendAction ( 'rebootesp', this );                    alert('Configuration sauvegardée !<br>Le système redémarre avec les nouveaux paramètres...', 'success', 'liveAlertPlaceholderIPConfig');">
@@ -162,60 +165,6 @@
             </div>
           </div>
           <br>
-          <h4>Configuration du mode Boost</h4>
-          <br>
-          <div class="row mb-3">
-            <div class="col-6"> <label for="boost_duration" class="form-label">Durée
-                en minutes</label> <input class="form-control text-center" id="boost_duration"
-                placeholder="xxx"
-                required=""
-                min="10"
-                max="600"
-                step="5"
-                type="number">
-            </div>
-            <div class="col-6"> <label for="boost_ratio" class="form-label">Puissance
-                (%)</label> <input class="form-control text-center" id="boost_ratio"
-                placeholder="xxx"
-                required=""
-                min="0"
-                max="100"
-                step="10"
-                type="number">
-            </div>
-          </div>
-          <br>
-          <div class="row mb-3">
-            <div class="col-9">
-              <div class="form-check form-switch"> <input class="form-check-input"
-                  role="switch"
-                  id="boost_timer_active"
-                  type="checkbox">
-                <label class="form-check-label" for="boost_timer_active">Activation
-                  horaire mode Boost</label> </div>
-            </div>
-          </div>
-          <div class="row mb-3">
-            <div class="col-6"> <label for="boost_timer_hour" class="form-label">Heure
-                d'activation</label> <input class="form-control text-center" id="boost_timer_hour"
-                placeholder="xx"
-                required=""
-                min="0"
-                max="23"
-                step="1"
-                type="number">
-            </div>
-            <div class="col-6"> <label for="boost_timer_minute" class="form-label">Minute
-                d'activation</label> <input class="form-control text-center" id="boost_timer_minute"
-                placeholder="xx"
-                required=""
-                min="0"
-                max="59"
-                step="1"
-                type="number">
-            </div>
-          </div>
-          <br>
           <h4>Configuration Relais primaire HTTP</h4>
           <br>
           <div class="row mb-3">
@@ -247,12 +196,17 @@
             </div>
           </div>
           <br>
-          <h4>Configuration Routeur PV HTTP</h4>
+          <h4>Configuration Routeur HTTP</h4>
           
  <p>
-Routeur HTTP secondaire (fonctionnel si le routeur SSR ne route plus ou si mode forcé.</p>
-<p>(Avant activation, assurez-vous d'avoir configuré vos dimmers HTTP (mode, Limite % puissance min et max) en vous connectant sur http://**Adresse_ip** OU http://**nomdimmer.local** (à modifier)<br>
-           Les autres paramètres du Routeur PV HTTP sont les mêmes que ceux du Routeur SSR</p>
+Routeur HTTP secondaire </br>
+<ul>
+<li>par défaut, fonctionne de façon cumulative avec SSR, nécessite relais type Dimmer Robotdyn;</li>
+<li>peut être utilisé avec second SSR, mais non cumulatif (option à changer dans le code source);</li>
+<li> peut piloter 2 dimmers.</li>  
+</ul></p>
+<p>(Avant activation, assurez-vous d'avoir configuré vos dimmers HTTP (mode, Limite % puissance min et max) en vous connectant sur http://dimmer1.local ou http://dimmer2.local.<br>
+Les autres paramètres du Routeur PV HTTP sont les mêmes que ceux du Routeur SSR</p>
            <div class="row mb-3">
             <div class="col-6"> <label for="dimmer_m" class="form-label">Mode Routeur HTTP actuel (devrait être Off avant modification)</label>
             <select class="form-select form-select-sm" aria-label=".form-select-sm example" id="dimmer_m" disabled="true">
@@ -285,7 +239,7 @@ type="text">
                                                 step="1"
                                                 type="number">
             </div>
-	   <div class="col-6"> <label for="dimmer_period" class="form-label">Période Appel Dimmer (s)</label> <input class="form-control text-center" id="dimmer_period"
+	   <div class="col-6"> <label for="dimmer_period" class="form-label">Réactivité (Période Appel Dimmer (s))</label> <input class="form-control text-center" id="dimmer_period"
                                                 placeholder="xx"
                                                 required=""
                                                 min="1"
@@ -293,32 +247,18 @@ type="text">
                                                 step="1"
                                                 type="number">
             </div>
+<div class="col-6"> <label for="dimmer_period" class="form-label">Sécurité: Energie Max. à router journalière (kWh)</label> <input class="form-control text-center" id="d_p_limit"
+                                                placeholder="xx"
+                                                required=""
+                                                min="0"
+                                                max="50"
+                                                step="1"
+                                                type="number">
+            </div>
         </div>
       <br>
       <br>
-          <h4>Configuration Sonde Température</h4>
-          <br>
-          <div class="row mb-3">
-            <div class="col-6">
-              <div class="form-check form-switch"> <input class="form-check-input"
-                  role="switch"
-                  id="temp_active"
-                  type="checkbox">
-                <label class="form-check-label" for="temp_active">Activation Utilisation Sonde Température</label> </div>
-            </div>
-          </div>
-          <div class="row mb-3">
-            <div class="col-6"> <label for="temp_max" class="form-label">Température
-                Maximale (°C)</label> <input class="form-control text-center" id="temp_max"
-                placeholder="xx"
-                required=""
-                min="10"
-                max="90"
-                step="1"
-                type="number">
-            </div>
-         </div>
-         <br>
+          
             <div class="row mb-3">
               <div class="col-12 d-grid gap-2"> <button type="submit" class="btn btn-warning"
                   id="btnFormIPConfig"
@@ -345,21 +285,20 @@ type="text">
                 Restaurer la configuration MaxPV!</button> </div>
             <br>
             <p class="lead"> </p>
-            <h4>Actions avancées</h4>
-            <span>Cliquer pour réaliser les actions avancées suivantes :</span>
-            <p></p>
-            <div class="d-grid gap-2"> <button class="btn btn-warning" type="submit"
-                onclick="sendAction ( 'rebootesp', this );
-                        alert('Le système redémarre...', 'success', 'liveAlertPlaceholderAdvancesAction');">
-                Redémarrer le Webserver</button> <button class="btn btn-danger"
-                type="submit"
-                onclick="sendAction ( 'eraseconfigesp', this  ); sendAction ( 'rebootesp', this );
-                        alert('Configurations Wifi et MaxPV! effacées.<br>Le système redémarre.<br>Se connecter au réseau temporaire de MaxPV avec l\'adresse 192.168.4.1', 'danger', 'liveAlertPlaceholderAdvancesAction');">
-                Oublier le réseau Wifi</button> </div>
-            <br>
-            <div class="fixed-bottom" id="liveAlertPlaceholderAdvancesAction"></div>
-          </div>
-        </form>
+             <h4>Actions avancées</h4>
+        <span>Cliquer pour réaliser les actions avancées suivantes :</span>
+        <p></p>
+        <div class="d-grid gap-2"> <button class="btn btn-warning"
+            type="submit"
+            onclick="sendAction ( 'saveindex', this )">Sauver
+            les index</button> <button class="btn btn-warning" type="submit"
+            onclick="sendAction ( 'restart', this )">Redémarrer
+            le routeur</button> <button class="btn btn-warning" type="submit" onclick="sendAction ( 'rebootesp', this )">Redémarrer
+            le Webserver</button> <button class="btn btn-danger" type="submit"
+            onclick="sendAction ( 'resetindex', this )">Remettre
+            les index à zéro</button> 
+        <br>
+        <div class="fixed-bottom" id="liveAlertPlaceholder"></div>
       </div>
     </main>
     <script>
@@ -387,8 +326,6 @@ type="text">
                     document.getElementById("dns1").value = doc["dns1"];
                     document.getElementById("dns2").value = doc["dns2"];
                     document.getElementById("http_port").value = doc["http_port"];
-                    document.getElementById("boost_duration").value = doc["boost_duration"];
-                    document.getElementById("boost_ratio").value = doc["boost_ratio"];
                     document.getElementById("mqtt_ip").value = doc["mqtt_ip"];
                     document.getElementById("mqtt_port").value = doc["mqtt_port"];
                     document.getElementById("mqtt_period").value = doc["mqtt_period"];
@@ -398,10 +335,6 @@ type="text">
                     else mqtt_active.checked = false;
 		    if (doc["mqtt_det"] == "1") mqtt_det.checked = true;
                     else mqtt_det.checked = false;	
-                    document.getElementById("boost_timer_hour").value = doc["boost_timer_hour"];
-                    document.getElementById("boost_timer_minute").value = doc["boost_timer_minute"];
-                    if (doc["boost_timer_active"] == "1") boost_timer_active.checked = true;
-                    else boost_timer_active.checked = false;
                     //relais_ext
                     if (doc["a_div2_ext"] == "1") a_div2_ext.checked = true;
                     else a_div2_ext.checked = false;
@@ -415,11 +348,9 @@ type="text">
 		    document.getElementById("dimmer_sumpourcent").value = doc["dimmer_sumpourcent"];
 		    document.getElementById("dimmer_sumpow").value = doc["dimmer_sumpow"];
 		    document.getElementById("dimmer_period").value = doc["dimmer_period"];
-		   //temp
-		    if (doc["temp_active"] == "1") temp_active.checked = true;
-            	    else temp_active.checked = false;
-            	    document.getElementById("temp_max").value = doc["temp_max"];
-                }
+		    document.getElementById("d_p_limit").value = doc["d_p_limit"];
+		
+		}
             }
             xhttp1.open("GET", "api/get?configmaxpv", true); xhttp1.send();
         }
@@ -435,8 +366,6 @@ type="text">
             doc["dns1"] = document.getElementById("dns1").value;
             doc["dns2"] = document.getElementById("dns2").value;
             doc["http_port"] = document.getElementById("http_port").value;
-            doc["boost_duration"] = document.getElementById("boost_duration").value;
-            doc["boost_ratio"] = document.getElementById("boost_ratio").value;
             doc["mqtt_ip"] = document.getElementById("mqtt_ip").value;
             doc["mqtt_port"] = document.getElementById("mqtt_port").value;
             doc["mqtt_period"] = document.getElementById("mqtt_period").value;
@@ -446,11 +375,7 @@ type="text">
             else doc["mqtt_active"] = "0";
 	    if(mqtt_det.checked == true) doc["mqtt_det"] = "1";
             else doc["mqtt_det"] = "0";
-            doc["boost_timer_hour"] = document.getElementById("boost_timer_hour").value;
-            doc["boost_timer_minute"] = document.getElementById("boost_timer_minute").value;
-            if(boost_timer_active.checked == true) doc["boost_timer_active"] = "1";
-            else doc["boost_timer_active"] = "0";
-	    //relais_ext
+            //relais_ext
 	    doc["a_div2_urlon"] = document.getElementById("a_div2_urlon").value;
 	    doc["a_div2_urloff"] = document.getElementById("a_div2_urloff").value;
             if(a_div2_ext.checked == true) doc["a_div2_ext"] = "1";
@@ -462,12 +387,9 @@ type="text">
             doc["dimmer_ip"] = document.getElementById("dimmer_ip").value;
 	    doc["dimmer_sumpourcent"] = document.getElementById("dimmer_sumpourcent").value;
 	    doc["dimmer_sumpow"] = document.getElementById("dimmer_sumpow").value;
-            doc["dimmer_period"] = document.getElementById("dimmer_period").value;
-	    //temp
-	    if(temp_active.checked == true) doc["temp_active"] = "1";
-            else doc["temp_active"] = "0";
-	    doc["temp_max"] = document.getElementById("temp_max").value;
-            var value_param = JSON.stringify(doc);
+        doc["dimmer_period"] = document.getElementById("dimmer_period").value;
+        doc["d_p_limit"] = document.getElementById("d_p_limit").value;
+	        var value_param = JSON.stringify(doc);
             args += value_param;
             xhttp.open("GET", args, true);
             xhttp.send();
@@ -512,10 +434,11 @@ type="text">
                 document.getElementById("dimmer_sumpourcent").value = doc["dimmer_sumpourcent"] ?? "0";
                 document.getElementById("dimmer_sumpow").value = doc["dimmer_sumpow"] ?? "0";
                 document.getElementById("dimmer_period").value = doc["dimmer_period"] ?? "1";
+			    document.getElementById("d_p_limit").value = doc["d_p_limit"] ?? "0";
                 //temp
                 if (doc["temp_active"] == "1") temp_active.checked = true;
                 else temp_active.checked = false;
-	            document.getElementById("temp_max").value = doc["temp_max"] ?? "";
+	            //document.getElementById("temp_max").value = doc["temp_max"] ?? "";
 		saveConfigMaxPV();
                 sendAction ( 'rebootesp' );
     	    });
