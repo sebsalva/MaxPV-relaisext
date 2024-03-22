@@ -1,27 +1,33 @@
-# Fork de MaxPV (température, mDNS, heure été/hiver, gestion d'un second routeur HTTP)
-Fork du Routeur Solaire MaxPV, basé sur la version 3.35 avec ajout de quelques modifications jusque 3.53 (watchdogwifi)
+# Fork de MaxPV (température, mDNS, heure été/hiver, gestion de trois routeurs)
+Fork du Routeur Solaire MaxPV, basé sur la version 3.53 
 
 Les modifications apportées sont les suivantes :
 
-* Ajout Gestion second Routeur HTTP qui permet de gérer une chaine de Dimmers. Cette version combine donc 2 routeurs :
-  * Quand le routeur principal (EcoPv) ne route plus, le routeur HTTP prend la main. Il route vers des Dimmers HTTP en cascade (Idée originale provenant de ce prototype https://github.com/xlyric/pv-router-esp32).
-  * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn. Testé avec SSR Jotta
-  * Dans le code actuel, le routeur principal (Ecopv) est prioritaire. Le routeur HTTP prend la main quand Ecopv ne route plus (routage = 0). Je ferai des modifications pour faire focntionner les 2 en même temps quand ce code aura été testé de façon approfondie. Pour l'instant, l'utilisation d'un SSR random et d'un SSR JOTTA non modifé (non random) crée des interférences. Avoir avec d'autres matériels
- 
-* Utilisation Capteur de température DALLAS DS18b20, lecture et calibration. Affichage sur l'interface Web et sous MQTT 
-* Gestion de température avec Capteur précédent pour :
-  * Donner un Seuil de température à ne pas dépasser dans page Configuration Web
-  * Stopper mode Boost si température >= seuil + hyteresis
-  * Stopper Relais SSR si température >= seuil + hyteresis
-  * Authoriser Allumage Relais SSR si température <= seuil + hyteresis
+* Ajout Routeur HTTP qui permet de gérer une chaine de deux Dimmers. Cette version combine donc 2 routeurs qui permettent de brancher 3 charges résistives:
+  * Le routeur principal (EcoPv) et le routeur HTTP peuvent fonctionner ensemble.
+  * Le routeur HTTP route vers des Dimmers HTTP en cascade (Idée originale provenant de ce prototype https://github.com/xlyric/pv-router-esp32).
+  * Utiliser des Dimmers dont le code est ici : https://github.com/sebsalva/PV-discharge-Dimmer-AC-Dimmer-KIT-Robotdyn. Testé avec SSR Jotta et Robotdyn
+  * Le routeur principal (Ecopv) est prioritaire.
 
+* Ajout de limites de routage journalières
+
+* Gestion de la température
+  * Utilisation Capteur de température DALLAS DS18b20, lecture et calibration. Affichage sur l'interface Web et sous MQTT
+  * Lecture à partir d'un flux MQTT "maxpv/settemperature" (flux pour l'instant en dur dans le code, voir mqtt.h). Permet de déporter la sonde.
+  * Seuil de température à ne pas dépasser dans page Configuration Web : Stopper mode Boost si température >= seuil + hyteresis 
+
+* Optimisation Mode Boost.
+  * Mode Boost non demarré si le CE est chargé. Il y a 3 conditions (température de consigne atteinte, limite de routage atteinte et Energie exporté importante)
+  * (en cours) calcul automatique du temps de boost journalié suivant le routage effectué (ex: on veut charger le CE de 5kw et le routeur a fournit 2kw au CE, alors le temps de boost sera pour charger le CE avec 3kw)  
 * Modification du Client NTP. Le nouveau client gère l'heure d'été / d'hiver
 
 * Sauvegarde des états du relais, du SSR et du routeur HTTP: si Maxpv redémarre, le relais et le SSR ne sont plus en mode automatique mais utiliserons le dernier mode sauvegardé avant extinction.
 
 * Modification de la gestion MQTT auto-discovery pour fonctionner avec le plugin MQTT auto-discovery de Domoticz. Les modifications apportées ne devraient rien changer pour les autres serveurs de Domotique mais je n'ai pas testé.
 
-* Optimisation Mode Boost. Mode Boost non demarré si le CE (branché sur SSR) est chargé (à atteind sa température de consigne). La condition est : MaxPv Routeur SSR utilise le mode AUTO, de l'énergie est exportée sur le réseau et l'énergie pour Routeur SSR est à 0. Le mode Boost n'étant pas demarré MaxPv Routeur SSR reste au mode AUTO. 
+* Lecture de la production sur un flux MQTT
+
+* Optimisation de la partie Web
 
 (Ces modifications sont maintenant disponibles dans Maxpv (non forké). Ces modifications ont été codées originalement et sont peut être différentes :)
 * Utilisation d'un Relais HTTP (appel du relais via HTTP pour ON et OFF) en place du relais physique (l'utilisation du relais physique est toujours possible). 
