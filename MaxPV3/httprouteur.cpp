@@ -5,11 +5,10 @@
 uint8_t dimmer_m = OFF;                        // commande Routeur HTTP
 char dimmer_ip[16] = "dimmer1.local";          // nom ou IP du dimmer
 String dimmer_ip2 = "192.168.1.88";            // IP du dimmer copie de dimmer_ip ou obtenu par résolution
-unsigned short dimmer_pow = 0;                        // puissance dimmer
+short dimmer_pow = 0;                        // puissance dimmer
 uint8_t dimmer_act = OFF;                      // mode Routeur HTTP
 uint8_t dimmer_count = 0;                      // compteur utilisé pour ping si pas d'autre appel HTTP
-unsigned short dimmer_sumpourcent = 100;              // somme des pourcentages de fonctionnement max sur tous les dimmers
-unsigned short dimmer_sumpow = 1000;                    // somme des puissances sur tous les dimmers
+short dimmer_sumpow = 1000;                    // somme des puissances sur tous les dimmers
 uint8_t dimmer_period = 5;                     // Période activité en secondes
 uint8_t dimmer_try = 0;                        // compteur nb tentatives appel dimmer
 unsigned int  dimmerwattsec = 0;               // compteur Energie Dimmer
@@ -32,15 +31,14 @@ short dimmer_engine() {
   int maxpow = dimmer_sumpow;  //ecoPVConfig[P_INSTALLPV].toInt(); // puiss. max à envoyer selon installation
   int curpower = ecoPVStats[P_ACT].toInt();
   int prouted = ecoPVStats[P_ROUTED].toInt();
-  int maxrouted = ecoPVConfig[P_RESISTANCE].toInt(); 
-  
+  int maxrouted = ecoPVConfig[P_RESISTANCE].toInt();
+
   //Ping dimmer
-  //  dimmer_m != OFF
   if ((dimmer_act == ON) && (dimmer_count >= DIMMER_CHECK)) {
     dimmer_count = 0;
-    #if defined(DEBUG_DIMMER)
+#if defined(DEBUG_DIMMER)
     tcpClient.println(F("Ping Dimmer HTTP"));
-    #endif
+#endif
     String url = F("http://") + dimmer_ip2 + F(DIMMER_URL_STATE);
     if (appel_http(url) != 1)
       dimmer_init();  // tentative reinit dimmer en cas d'erreur
@@ -51,24 +49,22 @@ short dimmer_engine() {
   // Routeur sur OFF
   if (dimmer_m == OFF && (dimmer_act == ON)) {
     tcpClient.println(F("Dimmer HTTP OFF"));
-    call_dimmer(0, 0);
+    call_dimmer(-(dimmer_sumpow + 1));
     return 1;
   }
   // Routeur Mode Force
   if ((dimmer_m == FORCE) && (dimmer_pow < dimmer_sumpow)) {
     tcpClient.println(F("Dimmer HTTP FORCE"));
-    call_dimmer(dimmer_sumpow, dimmer_sumpourcent);
+    call_dimmer(dimmer_sumpow);
     return 1;
   }
   // Routeur OFF
   // si dépassement limite
   if (dimmer_m == AUTOM && (dimmer_indexJ > d_p_limit * 1000 ))
   {
-    if (dimmer_act == ON) call_dimmer(0, 0);
+    if (dimmer_act == ON) call_dimmer(-(dimmer_sumpow + 1));
     tcpClient.print(F("Dimmer HTTP OFF limit reached"));
     return 1;
-    //tcpClient.println(ecoPVStats[P_ROUTED].toInt());
-    //call_dimmer(0, 0);
   }
   //
   // Routeur Mode Automatique
@@ -81,7 +77,7 @@ short dimmer_engine() {
 #if defined(DEBUG_DIMMER)
       tcpClient.print(F("Dimmer HTTP: "));
       tcpClient.print(curpower);
-      tcpClient.print(F(";"));
+      tcpClient.print(F("/"));
       tcpClient.println(dimmer_pow);
 #endif
       dimmer_compute = 0;
@@ -92,45 +88,25 @@ short dimmer_engine() {
         dimmer_index++; // ajout 1 wh
         dimmer_indexJ++;
       }
-
       //int margin =  ecoPVConfig[P_MARGIN].toInt();
       short dpow = 0;
-      short oldp = pow_to_pourcent(dimmer_pow);
-      short newp = 0;
-
       //
       // Injection calcul augmentation % dimmer
-      if ((curpower < 0) && ((curpower * -1) > DMARGIN)) {
+      if ((curpower < 0) && ((curpower * -1) > DMARGIN) && (dimmer_pow < dimmer_sumpow) ) {
         // calcul power
         cp = - curpower; // + DMARGIN;
         if (cp > 800) ratio = 3;
         else if (cp > 200) ratio = 2;
         else ratio = 1;
         cp = cp / ratio;
-        dpow = min((dimmer_pow + cp), maxpow);
-        //calcul en %
-        newp = pow_to_pourcent(dpow);
-        if ((abs(oldp - newp) >= DIMMER_POW_HYSTERESIS)) {
+        if (dimmer_pow + cp > dimmer_sumpow)
+          cp = dimmer_sumpow - dimmer_pow;
+
 #if defined(DEBUG_DIMMER)
-          tcpClient.print(F("Dimmer HTTP +:"));
-          tcpClient.println(dpow);
+        tcpClient.print(F("Dimmer HTTP +:"));
+        tcpClient.println(cp);
 #endif
-          call_dimmer(dpow, newp);
-        }
-      }
-      //reduction car EcoPv à réduit
-      else if ( (ecoPVStats[TRIAC_MODE].toInt() == AUTOM )  && (prouted > 0) && (prouted < maxrouted) && (dimmer_pow > 0)){
-        cp = maxrouted-prouted+DMARGIN;
-        dpow = max((dimmer_pow - cp), 0);
-        //calcul en %
-        newp = pow_to_pourcent(dpow);
-        if ((abs(oldp - newp) >= DIMMER_POW_HYSTERESIS)) {
-#if defined(DEBUG_DIMMER)
-          tcpClient.print(F("Dimmer HTTP -;ECOPV:"));
-          tcpClient.println(dpow);
-#endif
-          call_dimmer(dpow, newp);
-        }
+        call_dimmer(cp);
       }
       //
       // consommation energie reduction dimmer
@@ -141,18 +117,24 @@ short dimmer_engine() {
         else if (cp > 200) ratio = 1;
         else ratio = 1;
         cp = cp / ratio;
-        dpow = max((dimmer_pow - cp), 0);
-        //calcul en %
-        newp = pow_to_pourcent(dpow);
-        if ((abs(oldp - newp) >= DIMMER_POW_HYSTERESIS)) {
+        if (dimmer_pow - cp < 0)
+          cp = dimmer_sumpow ;
 #if defined(DEBUG_DIMMER)
-          tcpClient.print(F("Dimmer HTTP -:"));
-          tcpClient.println(dpow);
+        tcpClient.print(F("Dimmer HTTP -:"));
+        tcpClient.println(-cp);
 #endif
-          call_dimmer(dpow, newp);
-        }
+        call_dimmer(-cp);
       }
-     
+      //reduction car EcoPv à réduit
+      else if ( (ecoPVStats[TRIAC_MODE].toInt() == AUTOM )  && (prouted > 0) && (prouted < maxrouted) && (dimmer_pow > 0)) {
+        cp = maxrouted - prouted + DMARGIN;
+#if defined(DEBUG_DIMMER)
+        tcpClient.print(F("Dimmer HTTP -ECOPV:"));
+        tcpClient.println(-cp);
+#endif
+        call_dimmer(-cp);
+      }
+
     }
   }
   return 1;
@@ -209,35 +191,30 @@ void dimmer_failsafe() {
   tcpClient.println(F("Dimmer HTTP: failsafe"));
 }
 
-// ///////////////////////////////////////////////////////////////////////////////////
-// ////////////////// Fonction convertion puissance pourcentage        ///////////////
-// ////////////////// Uniquement avec dimmer                           ///////////////
-// ///////////////////////////////////////////////////////////////////////////////////
-int pow_to_pourcent(int power) {
-  if (power > 3 * DMARGIN) return ((int)(power * dimmer_sumpourcent / dimmer_sumpow));
-  else if (power > 0) return 1;
-  else return 0;
-  //return (int) power * dimmer_sumpourcent / dimmer_sumpow;
-}
 
 // ///////////////////////////////////////////////////////////////////////////////////
 // ////////////////// Appel Dimmer HTTP			                           ///////////////
 // ////////////////// dpow puissance,newp % dimmer associé à puisssance///////////////
 // ///////////////////////////////////////////////////////////////////////////////////
-//
-void call_dimmer(int dpow, int newp) {  
+void call_dimmer(int dpow) {
+  String url;
   //Ecopv reçoit le fait que le HTTP Routeur sera ON ; Bloque la puissance du routage du SSR. Avant appel dimmer
-  if ((dimmer_act == OFF) && dpow > 0) Dimmer_act_EcoPV(ON);
-  String url = HTTP + dimmer_ip2 + F(DIMMER_URL) + newp;
+  if ((dimmer_act == OFF) && dimmer_pow > 0) Dimmer_act_EcoPV(ON);
+  if ( dimmer_pow + dpow <= 0 ) //- dpow > dimmer_sumpow)
+    url = HTTP + dimmer_ip2 + F(DIMMER_URLOFF);
+  else
+    url = HTTP + dimmer_ip2 + F(DIMMER_URL) + dpow; // envoi puissance régulation positive ou neg
   if (appel_http(url) == 1) {
-    //Ecopv reçoit le fait que le HTTP Routeur sera OFF; Le SSR pourra s'allumer. Fait après appel dimmer au cas ou la requete HTTP ne fonctione pas
-    if ((dimmer_act == ON) && dpow <= 0) Dimmer_act_EcoPV(OFF);
-    if (dpow > 0) {
+    dimmer_pow = dimmer_pow + dpow;
+    if ( dimmer_pow < 0 ) dimmer_pow = 0;
+    if ( dimmer_pow > dimmer_sumpow ) dimmer_pow = dimmer_sumpow;
+    //Ecopv reçoit le fait que le HTTP Routeur sera OFF; Le SSR pourra s'allumer. Fait après appel dimmer au cas ou la requete HTTP ne fonctionne pas
+    if ((dimmer_act == ON) && dimmer_pow <= 0) Dimmer_act_EcoPV(OFF);
+    if (dimmer_pow > 0) {
       dimmer_act = ON;
     } else {
       dimmer_act = OFF;
     }
-    dimmer_pow = dpow;
     dimmer_count = 0;
     dimmer_try = 0;
   } else dimmer_init();
@@ -250,7 +227,7 @@ void call_dimmer(int dpow, int newp) {
 ///////////////////////////////////////////////////////////////////////////////////////
 void dimmer_indexReset(void) {
   dimmer_index = 0;
-  dimmer_indexJ = 0;  
+  dimmer_indexJ = 0;
   dimmer_indexWrite();
 }
 
@@ -260,11 +237,8 @@ void dimmer_indexReset(void) {
 ///////////////////////////////////////////////////////////////////////////////////////
 void dimmer_indexWrite(void) {
   File configFile = LittleFS.open(CFGFILE, "w");
-  float f = 0.0;
-  if (dimmer_index > 0) {
-    jsonIndex["dimmer_idx"] = dimmer_index;
-    serializeJson(jsonIndex, configFile);
-  }
+  jsonIndex["dimmer_idx"] = dimmer_index;
+  serializeJson(jsonIndex, configFile);
   configFile.close();
 }
 
@@ -279,9 +253,7 @@ void dimmer_indexRead(void) {
     if (!error) {
       serializeJsonPretty(jsonIndex, Serial);
       dimmer_index = jsonIndex["dimmer_idx"] | 0;
-      //dimmerwattsec = (long) i * (float)3600000 ;
-      //trop grand limiter à kwh
-      //outputfull
     }
   }
+  configFile.close();
 }

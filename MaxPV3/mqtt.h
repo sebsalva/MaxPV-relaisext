@@ -488,7 +488,6 @@ void mqttTransmit(void)
     //if (dimmer_m == AUTOM ) {
     sprintf(tmp, "%d", dimmer_pow);
     mqttClient.publish(MQTT_P_ROUTED2, 0, true, tmp);
-    float f = 0.0;
     sprintf(tmp, "%f", ((float)dimmer_index/1000.0));
     mqttClient.publish(MQTT_INDEX_ROUTED2, 0, true, tmp);
     //}

@@ -56,7 +56,8 @@ byte boostRatio           = 100;       // En % de la puissance max
 int boostDuration         = 120;       // En minutes
 uint8_t boostTimerHour    = 17;        // Heure Timer Boost
 uint8_t boostTimerMinute  = 0;         // Minute Timer Boost
-uint8_t boostTimerActive  = OFF;       // BOOST timer actif (=ON) ou non (=OFF)
+uint8_t boostTimerActive  = OFF;       // BOOST timer actif mode 1 (=ON), mode 2 (=2) ou non (=OFF)
+
 
 // Configuration de MQTT
 extern String mqttIP;                                      // IP du serveur MQTT
@@ -76,8 +77,8 @@ uint8_t etatrelais    	    = 0;
 // Variables Configuration Dimmer HTTP
 extern uint8_t           dimmer_m;
 extern char              dimmer_ip[16] ;            // nom ou IP du dimmer
-extern unsigned short    dimmer_sumpourcent ;       // somme des porcentages de fonctionnement max sur tous les dimmers
-extern unsigned short    dimmer_sumpow ;            // somme des puissances sur tous les dimmers
+//extern unsigned short    dimmer_sumpourcent ;       // somme des porcentages de fonctionnement max sur tous les dimmers
+extern short    dimmer_sumpow ;            // somme des puissances sur tous les dimmers
 extern uint8_t           dimmer_period ;            //Période activité en secondes
 
 // Gestion Temperature
@@ -411,6 +412,12 @@ void setup()
     request->send(LittleFS, F("/config.json"), String(), true);
   });
 
+  // Download le fichier index de MaxPV
+  webServer.on("/DLindex", HTTP_ANY, [](AsyncWebServerRequest * request)
+  {
+    request->send(LittleFS, F("/index.json"), String(), true);
+  });
+
   // ***********************************************************************
   // ********                  HANDLERS DE L'API                    ********
   // ***********************************************************************
@@ -643,8 +650,8 @@ void setup()
         strlcpy ( dimmer_ip,
                   jsonConfig ["dimmer_ip"],
                   16);
-      if (jsonConfig["dimmer_sumpourcent"])
-        dimmer_sumpourcent = jsonConfig["dimmer_sumpourcent"];
+//      if (jsonConfig["dimmer_sumpourcent"])
+//        dimmer_sumpourcent = jsonConfig["dimmer_sumpourcent"];
       if (jsonConfig["dimmer_sumpow"])
         dimmer_sumpow = jsonConfig["dimmer_sumpow"];
       if (jsonConfig["dimmer_period"])
@@ -729,6 +736,9 @@ void setup()
   tcpClient.print(F("Port web : "));
   tcpClient.println(httpPort);
 
+ // Innitialisation Index Routeur HTTP
+  dimmer_indexRead ();
+
   // Démarrage du client MQTT si configuré
   if (mqttActive == ON) {
     tcpClient.println( F("Démarrage client Mqtt") );
@@ -775,8 +785,7 @@ void setup()
 
   // Peuplement des références des index journaliers
   setRefIndexJour();
-  // Innitialisation Index Routeur HTTP
-  dimmer_indexRead ();
+ 
   // Initialisation de l'historique
   initHistoric();
   tcpClient.println(F("Historiques initialisés.\n\n"));
@@ -1026,7 +1035,7 @@ bool configRead(void)
         strlcpy ( dimmer_ip,
                   jsonConfig ["dimmer_ip"] | "dimmer1.local",
                   16);
-        dimmer_sumpourcent = jsonConfig["dimmer_sumpourcent"];
+    //    dimmer_sumpourcent = jsonConfig["dimmer_sumpourcent"];
         dimmer_sumpow = jsonConfig["dimmer_sumpow"];
         dimmer_period = jsonConfig["dimmer_period"];
         d_p_limit = jsonConfig["d_p_limit"];
@@ -1045,6 +1054,7 @@ bool configRead(void)
       Serial.println(F("Erreur durant l'analyse du fichier !"));
       return false;
     }
+  configFile.close();
   }
   else
   {
@@ -1081,13 +1091,11 @@ void configWrite(void)
   //config dimmer
   jsonConfig["dimmer_m"] = dimmer_m;
   jsonConfig["dimmer_ip"] = dimmer_ip;
-  jsonConfig["dimmer_sumpourcent"] = dimmer_sumpourcent;
   jsonConfig["dimmer_sumpow"] = dimmer_sumpow;
   jsonConfig["dimmer_period"] = dimmer_period;
   jsonConfig["d_p_limit"] = d_p_limit;
   //temperature
   jsonConfig["temp_active"] = tempactive;
-  //jsonConfig["temp_max"] = tempmax;
   File configFile = LittleFS.open(F("/config.json"), "w");
   serializeJson(jsonConfig, configFile);
   configFile.close();
@@ -1096,7 +1104,7 @@ void configWrite(void)
 void rebootESP(void)
 {
   dimmer_indexWrite() ;
-  delay(100);
+  delay(1000);
   ESP.reset();
   delay(1000);
 }
@@ -1129,7 +1137,12 @@ bool telnetDiscoverClient(void)
     tcpClient.print(F("Puissance pour le mode BOOST : "));
     tcpClient.print(boostRatio);
     tcpClient.println(F(" %"));
-    tcpClient.print(F("Output (CE) chargé: "));
+    if (boostTime > 0)
+       {
+        tcpClient.print(F(" Tesmp boost restant :"));
+        tcpClient.println(boostTime);
+       }
+    tcpClient.print(F("CE chargé: "));
     tcpClient.println(ecoPVStats[OUTPUTFULL]);
     return true;
   }
@@ -1219,8 +1232,6 @@ bool serialProcess(void)
         if (i < (NB_STATS + NB_STATS_SUPP - 1))
           ecoPVStatsAll += F(",");
       }
-      // temperature
-      //temp = ecoPVStats[TEMP].toInt();
 
     }
 
@@ -1441,12 +1452,25 @@ void watchDogContactEcoPV(void)
 // Fonctions de gestion des tâches de haut niveau                //
 // liées au routage et effectuées par l'ESP :                    //
 // Mode BOOST, index journaliers, historique                     //
+// ModeER 0 mode temps fourni par utilisateur                    //
+// ModeER 1 mode temps calculé selon E voulue - E routée         //
 ///////////////////////////////////////////////////////////////////
-
 void boostON(void)
 {
+  float boostEnergy;         // Energie journalière pour CE attendue en Kw
+  float engy = 0;    
   if ( boostRatio != 0 ) {
-    boostTime = ( 60 * boostDuration );   // conversion en secondes
+    if (boostTimerActive == 2) {
+      boostEnergy = ecoPVConfig[P_RESISTANCE].toFloat()*boostDuration/60000;
+      engy= ecoPVStats[INDEX_ROUTED].toFloat() - ecoPVStats[INDEX_ROUTED_J].toFloat();
+      boostTime = (boostEnergy - engy) / (ecoPVConfig[P_RESISTANCE].toFloat()/1000) * 3600;
+      if (boostTime < 0) boostTime=0;
+      }
+     else boostTime = ( 60 * boostDuration );   // conversion en secondes
+    #if defined(DEBUG_SERIAL)
+    tcpClient.print(F("Temps: "));
+    tcpClient.println(boostTime);
+    #endif
     burstCnt = 0;
     if (mqttClient.connected ()) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "on");
   }
@@ -1509,10 +1533,8 @@ void timeScheduler(void)
   // Déclenchement du mode BOOST sur Timer
   // Déclenchemeent si output (CE) non chargé
 
-  if (ecoPVStats[OUTPUTFULL].toInt() == OFF && ( hour == boostTimerHour ) && ( minute == boostTimerMinute ) && ( boostTimerActive == ON ) ) {
+  if ( (ecoPVStats[OUTPUTFULL].toInt() == OFF) && ( boostTimerActive != OFF ) && ( hour == boostTimerHour ) && ( minute == boostTimerMinute ) ) 
     boostON ( );
-
-  };
 }
 
 ///////////////////////////////////////////////////////////////////

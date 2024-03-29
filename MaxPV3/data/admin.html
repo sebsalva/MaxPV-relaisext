@@ -202,10 +202,10 @@
 Routeur HTTP secondaire </br>
 <ul>
 <li>par défaut, fonctionne de façon cumulative avec SSR, nécessite relais type Dimmer Robotdyn;</li>
-<li>peut être utilisé avec second SSR, mais non cumulatif (option à changer dans le code source);</li>
-<li> peut piloter 2 dimmers.</li>  
+<li>peut être utilisé avec un SSR zerocross, mais non cumulatif (option à changer dans le code source);</li>
+<li> peut piloter une chaine de dimmers.</li>  
 </ul></p>
-<p>(Avant activation, assurez-vous d'avoir configuré vos dimmers HTTP (mode, Limite % puissance min et max) en vous connectant sur http://dimmer1.local ou http://dimmer2.local.<br>
+<p>(Avant activation, configurez vos dimmers HTTP (mode, Limite % puissance min et max, puissance) en vous connectant sur http://dimmer-xxxx.local (xxxx fin adresse MAC).<br>
 Les autres paramètres du Routeur PV HTTP sont les mêmes que ceux du Routeur SSR</p>
            <div class="row mb-3">
             <div class="col-6"> <label for="dimmer_m" class="form-label">Mode Routeur HTTP actuel (devrait être Off avant modification)</label>
@@ -224,13 +224,6 @@ type="text">
           </div>
           </div>
           <div class="row mb-3">
-          <div class="col-6"> <label for="dimmer_sumpourcent" class="form-label">Somme % limite max de tous les dimmers</label> <input class="form-control text-center" id="dimmer_sumpourcent"
-                          placeholder="xx"
-                          min="0"
-                          max="300"
-                          step="1"
-                          type="number">
-          </div>
           <div class="col-6"> <label for="dimmer_sumpow" class="form-label">Somme puissances de tous les dimmers (W)</label> <input class="form-control text-center" id="dimmer_sumpow"
                                                 placeholder="xx"
                                                 required=""
@@ -345,7 +338,6 @@ type="text">
         	    else if(doc["dimmer_m"] == "9") document.getElementById("dimmer_m").value = "auto";
         	    else document.getElementById("dimmer_m").value ="off";
         	    document.getElementById("dimmer_ip").value = doc["dimmer_ip"];
-		    document.getElementById("dimmer_sumpourcent").value = doc["dimmer_sumpourcent"];
 		    document.getElementById("dimmer_sumpow").value = doc["dimmer_sumpow"];
 		    document.getElementById("dimmer_period").value = doc["dimmer_period"];
 		    document.getElementById("d_p_limit").value = doc["d_p_limit"];
@@ -385,7 +377,6 @@ type="text">
             else if(document.getElementById("dimmer_m").value == "auto") doc["dimmer_m"] = "9";
             else doc["dimmer_m"] = "0";
             doc["dimmer_ip"] = document.getElementById("dimmer_ip").value;
-	    doc["dimmer_sumpourcent"] = document.getElementById("dimmer_sumpourcent").value;
 	    doc["dimmer_sumpow"] = document.getElementById("dimmer_sumpow").value;
         doc["dimmer_period"] = document.getElementById("dimmer_period").value;
         doc["d_p_limit"] = document.getElementById("d_p_limit").value;
@@ -431,7 +422,6 @@ type="text">
                 else if(doc["dimmer_m"] == "9") document.getElementById("dimmer_m").value = "auto";
                 else document.getElementById("dimmer_m").value ="off";
                 document.getElementById("dimmer_ip").value = doc["dimmer_ip"] ?? "";
-                document.getElementById("dimmer_sumpourcent").value = doc["dimmer_sumpourcent"] ?? "0";
                 document.getElementById("dimmer_sumpow").value = doc["dimmer_sumpow"] ?? "0";
                 document.getElementById("dimmer_period").value = doc["dimmer_period"] ?? "1";
 			    document.getElementById("d_p_limit").value = doc["d_p_limit"] ?? "0";

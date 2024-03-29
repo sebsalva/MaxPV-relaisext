@@ -1,8 +1,8 @@
 #ifndef MAXPV_H
 #define MAXPV_H
 
-#define DEBUG_DIMMER
-#define DEBUG_SERIAL
+//#define DEBUG_DIMMER
+//#define DEBUG_SERIAL
 //#define DEBUG_HTTPC
 #define MAXPV_FTP_SERVER
 
