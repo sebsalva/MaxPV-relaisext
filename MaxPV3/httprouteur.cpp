@@ -168,7 +168,7 @@ void dimmer_init() {
       }
     }
   } else dimmer_ip2 = String(dimmer_ip);
-  String url = F("http://") + dimmer_ip2 + F(DIMMER_URL) + F("0");
+  String url = F("http://") + dimmer_ip2 + F(DIMMER_URLOFF);
   if ((n > 0) && (appel_http(url) == 1)) {
     dimmer_count = 0;
     dimmer_try = 0;
