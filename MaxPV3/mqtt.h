@@ -39,7 +39,7 @@
 #define MQTT_STATUS_BYTE      "maxpv/statusbyte"
 #define MQTT_TEMP             "maxpv/temperature"
 #define MQTT_SET_TEMP         "maxpv/settemperature"
-#define MQTT_SET_PV           "shellies/shellyem-34945470F5B8/emeter/0/power"
+//#define MQTT_SET_PV           "shellies/shellyem-34945470F5B8/emeter/0/power"
 
 // Variables Configuration de MQTT
 String mqttIP;                                      // IP du serveur MQTT
@@ -77,7 +77,7 @@ void onMqttConnect(bool sessionPresent)
   mqttClient.subscribe(MQTT_SET_DIMMER_MODE, 0);
   mqttClient.subscribe(MQTT_SET_BOOST_MODE, 0);
   mqttClient.subscribe(MQTT_SET_TEMP, 0);
-  mqttClient.subscribe(MQTT_SET_PV, 0);
+  //mqttClient.subscribe(MQTT_SET_PV, 0);
 
   // Publication du status
   mqttClient.publish(MQTT_STATE, 0, true, "connected");
