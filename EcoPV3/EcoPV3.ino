@@ -197,7 +197,7 @@ int   PHASE_CALIB  =       13;        // Valeur de correction de la phase (retar
 // 32 = application d'une avance = temps de conversion ADC
 int   P_OFFSET     =      -15;        // Correction d'offset de la lecture de Pactive en Watt
 int   P_RESISTANCE =     2000;        // Valeur en Watt de la résistance contrôlée
-int   P_LIMIT      =     15;       // Energie Max. journalière à faire router
+float   P_LIMIT    =     15.0;       // Energie Max. journalière à faire router
 // ************* Paramètres de régulation du routeur de puissance (valeurs par défaut)
 int   P_MARGIN     =       10;        // Cible de puissance importée en Watt
 int   GAIN_P       =        8;        // Gain proportionnel du correcteur
@@ -297,7 +297,7 @@ const paramInConfig pvrParamConfig [ ] = {
   { 4,        0,      10,   &S_Relay        },       // S_Relay sauvegarde
   { 0,        -20,    20,   &T_CALIB        },       // T_CALIB
   { 0,        15,     90,   &T_MAX          },        // T_MAX
-  { 0,        0,      90,   &P_LIMIT        }         // P_LIMIT
+  { 1,        0,      90,   &P_LIMIT        }         // P_LIMIT
 };
 
 // ***********************************************************************************
@@ -454,7 +454,7 @@ struct dataEeprom {                         // Structure des données pour le st
   byte                  s_relay;
   int                   t_calib;
   int                   t_max;
-  int                   p_limit;
+  float                   p_limit;
   // fin des données eeprom V2
   // taille totale : 44 bytes (byte = 1 byte, int = 2 bytes, long = float = 4 bytes) + 3 byte _ext +2 etat +2 +1
 };
@@ -878,17 +878,12 @@ void loop ( ) {
       if ( temp >= ( T_MAX + hysteresis ))
         outputfull = 2;
       //Prouted au max et export > P_INSTALLPV - P_RESISTANCE
-      if ( Prouted >= P_RESISTANCE && Pexp > lim )
-        outputfull = 3;
-      // idem avec Pimpulsion si recu
-      //lim = max( 0, (Pimpulsion - P_RESISTANCE) );
-      //if ( Pimpulsion > 0 && Prouted >= P_RESISTANCE && Pexp > lim )
-      if (indexRoutedJ * WH_PER_INC > P_LIMIT * 1000)
+      //if ( Prouted >= P_RESISTANCE && Pexp > lim )
+      //  outputfull = 3;
+      // si limite atteinte
+      if ((float(indexRoutedJ * WH_PER_INC)) > (P_LIMIT * 1000.0))
         outputfull = 4;
-      //Serial.print( F("DONE:CE,"));
-      //Serial.print( outputfull);
-      //Serial.println(F(",END#"));
-    }
+      }
 
     // *** Initialisation des statistique OCR1A                           ***
     OCR1A_avg = 0;
@@ -1766,6 +1761,25 @@ void configTimer2 ( void ) {
 }
 
 
+///////////////////////////////////////////////////////////////////////
+// lecture température                                               //
+// Capteur Dallas                                                    //
+///////////////////////////////////////////////////////////////////////
+#if defined (Dallas)
+void readTemp()
+{
+  ds.requestTemperatures();
+  short t = ds.getTempCByIndex(0);
+  if (t<0 or t> 90)  {
+    temp = previous_t;
+  }
+  else {
+    previous_t = temp;
+    temp = t + T_CALIB;
+  }
+}
+#endif
+
 // ***********************************************************************************
 // ***************************   ROUTINES D'INTERRUPTION   ***************************
 // ***********************************************************************************
@@ -1868,19 +1882,8 @@ void zeroCrossingInterrupt ( void ) {
     // on calcule la commande à appliquer (correction PI)
     // note : lissage de l'erreur sur 2 périodes pour l'action proportionnelle pour corriger le bruit systématique
 
-    //dimmer
-    //dimmerHTTP se déclenche ssi SSR est au max si controlCommand >255
-    //controlCommand devrait diminuer ssi dimmer est inactif -> mais perte de réactivité ? à tester
-    //if ( !DIMMER_IS_SSR && dimmer_act == ON )
-    //{
-    //  controlCommand = last_controlCommand;
-    //  }
-    //  else{
     controlCommand = long ( GAIN_I ) * controlIntegral + long ( GAIN_P ) * ( controlError + lastControlError );
-    //last_controlCommand = controlCommand;
-    //    }
-
-
+   
     // application du gain fixe de normalisation : réduction de COMMAND_BIT_SHIFT bits
     controlCommand = controlCommand >> COMMAND_BIT_SHIFT;
     if ( controlCommand <= 0 ) {                                // équilibre ou importation, donc pas de routage de puissance
@@ -1903,13 +1906,6 @@ void zeroCrossingInterrupt ( void ) {
       OCR1A = energyToDelay [ byte ( controlCommand ) ];
     }
 
-    // si on n'est pas en mode automatique, on gèle la commande routage (==> arrêt Timer et pas d'accumulation de puissance routée)
-    // mais on a quand même fait auparavant les calculs de régulation
-    // ajout Temperature test
-    // ajout limite injection
-    // ajout Test Dimmer : si dimmer mode SSR et actif alors on eteind ecopv (les 2 sont incompatibles)
-    //if ( temp >= T_MAX + hysteresis ) temp_bool = ON;
-    //if ( temp <= T_MAX - hysteresis ) temp_bool = OFF;
     if ( (triacMode == STOP) || (DIMMER_IS_SSR && dimmer_act == ON) || (outputfull != OFF) )
     {
       TCCR1B = 0;
@@ -2189,22 +2185,3 @@ void pulseExternalInterrupt ( void ) {
     TCCR2B = 0x07;              // on redémarre le Timer
   }
 }
-
-///////////////////////////////////////////////////////////////////////
-// lecture température                                               //
-// Capteur Dallas                                                    //
-///////////////////////////////////////////////////////////////////////
-#if defined (Dallas)
-void readTemp()
-{
-  ds.requestTemperatures();
-  short t = ds.getTempCByIndex(0);
-  if (t<0 or t> 90)  {
-    temp = previous_t;
-  }
-  else {
-    previous_t = temp;
-    temp = t + T_CALIB;
-  }
-}
-#endif
