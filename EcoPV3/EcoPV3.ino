@@ -1271,6 +1271,12 @@ void serialRequest ( void ) {
       temp = incomingCommand.toInt ( );
       Serial.print ( F("DONE:SETTEMP,OK,") );
     }
+    else if ( incomingCommand.startsWith ( F("RSTP") ) ) {
+    //*** reset des paramètres à 00:00***
+    indexRoutedJ = 0;
+    outputfull = OFF;		      
+    Serial.print ( F("DONE:RSTP,OK,") );
+    }
     else Serial.print ( F("UNKNOWN COMMAND,") );
   }
   else Serial.print ( F("ERROR?,") );
@@ -1442,19 +1448,13 @@ void upTime ( void ) {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // PVRScheduler                                                                      //
-// Fonction Scheduler appelée chque seconde                                          //
+// Fonction Scheduler appelée chaque seconde                                          //
 ///////////////////////////////////////////////////////////////////////////////////////
 void PVRScheduler ( void ) {
   static unsigned long  lastDeltaTimeImpulsion = 0;
   static unsigned long  lastMinuteDeltaTimeImpulsion = 0;
   static bool           impulsionFlag = false;
   unsigned long         deltaTimeImpulsion_tmp = 0;
-
-  //*** Tous les jours   ***
-  if ( ( minutesOnline == 0 ) && ( hoursOnline == 0 )  ) {
-    indexRoutedJ = 0;
-    outputfull = OFF;
-  }
 
   //*** Toutes les heures : Enregistrement des index en mémoire EEPROM  ***
   if ( ( minutesOnline == 0 ) && ( secondsOnline == 0 ) && ( nb_hours == NB_HOURS ) ) indexWrite ( );

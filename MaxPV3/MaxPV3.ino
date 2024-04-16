@@ -1388,6 +1388,7 @@ void Dimmer_act_EcoPV(byte opMode)
   Serial.print(command);
 }
 
+// envoi Power PV  recue par MQTT
 void SetPVEcoPV(String power){
     String command = F("SETPV,");
     command += power;
@@ -1395,6 +1396,7 @@ void SetPVEcoPV(String power){
   Serial.print(command);
 }
 
+// envoi température recue par MQTT
 void SetTempEcoPV(String temp){
     String command = F("SETTEMP,");
     command += temp;
@@ -1402,7 +1404,10 @@ void SetTempEcoPV(String temp){
   Serial.print(command);
 }
 
-
+// envoi CMD pour reinitialiser des paramètres à 00:00
+void ResetPEcoPV(void){
+    Serial.print(F("RSTP,END#"));
+}
 
 void setRefIndexJour(void)
 {
@@ -1411,6 +1416,7 @@ void setRefIndexJour(void)
   ecoPVStats[INDEX_IMPORT_J] = ecoPVStats[INDEX_IMPORT];
   ecoPVStats[INDEX_EXPORT_J] = ecoPVStats[INDEX_EXPORT];
   ecoPVStats[INDEX_IMPULSION_J] = ecoPVStats[INDEX_IMPULSION];
+  ResetPEcoPV();
 }
 
 void initHistoric(void)
@@ -1524,7 +1530,7 @@ void timeScheduler(void)
   int minute = timeClient.minutes();
 
 
-  // Mise à jour des index de début de journée en début de journée solaire à 00H00
+  // Mise à jour des index de début de journée en début de journée à 00H00
   // indicateur de de output (CE) chargé à OFF
   if ( ( hour == 0 ) && ( minute == 0 ) ) {
     setRefIndexJour ( );
