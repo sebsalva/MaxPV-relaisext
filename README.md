@@ -17,8 +17,8 @@ Les modifications apportées sont les suivantes :
   * Seuil de température à ne pas dépasser dans page Configuration Web : Stopper mode Boost si température >= seuil + hyteresis 
 
 * Optimisation Mode Boost.
-  * Calcul automatique du temps de boost journalié suivant le routage effectué (ex: on veut charger le CE de 5kw et le routeur a fournit 2kw au CE, alors le temps de boost sera pour charger le CE avec 3kw)
-  * Mode Boost non demarré si le CE est chargé. Il y a 3 conditions (température de consigne atteinte, limite de routage atteinte et Energie exporté importante)
+  * Calcul automatique du temps de boost journalié suivant le routage effectué (ex: on veut charger le CE de 5kw et le routeur a fourni 2kw au CE, alors le temps de boost sera calculé pour charger le CE avec 3kw)
+  * Mode Boost non demarré si le CE est chargé. Il y a 2 conditions (température de consigne atteinte, limite de routage atteinte). D'autres conditions sont en cours de test.
    
 * Modification du Client NTP. Le nouveau client gère l'heure d'été / d'hiver
 
