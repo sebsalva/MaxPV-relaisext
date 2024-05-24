@@ -47,7 +47,7 @@ extern String ecoPVConfig[];
 extern WiFiClient tcpClient;
 extern String ecoPVStats[];
 extern String ecoPVConfig[];
-extern short appel_http ( String );
+extern short appel_http ( String& );
 short dimmer_engine( void ) ;
 void dimmer_failsafe( void );
 void dimmer_init( void );

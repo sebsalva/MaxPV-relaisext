@@ -131,9 +131,8 @@ int historyCounter = 0; // position courante dans le tableau de l'historique
 // = position du prochain enregistrement à réaliser
 
 // Variables pour la gestion du mode BOOST
-#define BURST_PERIOD 300    // Période des bursts SSR pour le mode BOOST en secondes
-int boostTime = -1;         // Temps restant pour le mode BOOST, en secondes (-1 = arrêt)
-int burstCnt = 0;           // Compteur de la PWM software pour la gestion du mode BOOST entre 0 et BURST_PERIOD
+#define BURST_PERIOD 300     // Période des bursts SSR pour le mode BOOST en secondes
+long boostTime = -1;         // Temps restant pour le mode BOOST, en secondes (-1 = arrêt)
 
 // buffer pour manipuler le fichier de configuration de MaxPV! (ajuster la taille en fonction des besoins)
 StaticJsonDocument<1024> jsonConfig;
@@ -176,9 +175,13 @@ void setup()
   unsigned long refTime = millis();
   boolean APmode = true;
 
+  //String optimization
+  ecoPVConfigAll.reserve(96);
+  ecoPVStatsAll.reserve(160);
+
   // Début du debug sur liaison série
   Serial.begin(115200);
-  Serial.println(F("\nMaxPV! par Bernard Legrand (2022)."));
+  Serial.println(F("\nMaxPV!"));
   Serial.print(F("Version : "));
   Serial.println(MAXPV_VERSION);
   Serial.println();
@@ -344,6 +347,7 @@ void setup()
   webServer.on("/index.html", HTTP_ANY, [](AsyncWebServerRequest * request)
   {
     String response = "";
+    
     if ( LittleFS.exists ( F("/index.html") ) ) {
       request->send ( LittleFS, F("/index.html") );
     }
@@ -537,6 +541,7 @@ void setup()
   {
     String response = F("Request successfully processed");
     String mystring = "";
+    mystring.reserve(32);
     if ( ( request->hasParam ( "param" ) ) && ( request->hasParam ( "value" ) )
          && ( request->getParam("param")->value().toInt() > 0 ) && ( request->getParam("param")->value().toInt() <= ( NB_PARAM - 1 ) ) ) {
       mystring = request->getParam("value")->value();
@@ -772,11 +777,11 @@ void setup()
   // Premier peuplement des informations de configuration de EcoPV
   clearSerialInputCache();
   getAllParamEcoPV();
-  delay(100);
+  yield();
   serialProcess();
   clearSerialInputCache();
   getVersionEcoPV();
-  delay(100);
+  yield();
   serialProcess();
   // Récupération des informations de fonctionnement
   // En moins d'une seconde EcoPV devrait envoyer les informations
@@ -798,7 +803,7 @@ void setup()
 
   // Routeur HTTP init
   dimmer_init0( );
-  delay (100);
+  yield();
 
   // ***********************************************************************
   // ********      DEFINITION DES TACHES RECURRENTES DE TICKER      ********
@@ -907,22 +912,16 @@ void setup()
     // traitement du mode BOOST
     //ajout température. Si température -> XXX on stoppe le boost
     // ajout si output chargé -> on stoppe
+    //boostTime--;
     if ((tempactive == ON ) && (ecoPVStats[OUTPUTFULL].toInt() == 2))
-    {
-      boostTime = 0;
-    }
+        boostOFF();
 
-    if (boostTime > 0) { //pb ici ? sauvegarde
-      if ( burstCnt <= ( ( BURST_PERIOD * int ( boostRatio ) ) / 100 ) ) SSRModeEcoPV(FORCE2);
-      else SSRModeEcoPV(STOP);
-      boostTime--;
-      burstCnt++;
-      if ( burstCnt >= BURST_PERIOD ) burstCnt = 0;
+    //controle ?
+    if (boostTime == 0){
+    if (mqttClient.connected ()) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off"); 
+    //  boostOFF();
     }
-    else if (boostTime == 0) {
-      SSRModeEcoPV(AUTOM);
-      boostTime--;
-    }
+    
     if (!WiFi.isConnected()) shouldCheckWifi = true;
 
     if (!mqttClient.connected ()) shouldCheckMQTT = true;
@@ -948,7 +947,6 @@ void setup()
       mqttTransmit();
   },
   nullptr, true);
-  delay(500);
 }
 
 
@@ -959,14 +957,14 @@ void setup()
 void loop()
 {
   watchDogContactEcoPV();
-  delay(100);
+  yield();
   // Exécution des tâches récurrentes Ticker
   ts.update();
 
   if (shouldCheckWifi) watchDogWifi();
 
   if (shouldCheckMQTT) startMqtt();
-  delay(100);
+  yield();
 
 }
 
@@ -1106,7 +1104,7 @@ void rebootESP(void)
   dimmer_indexWrite() ;
   delay(1000);
   ESP.reset();
-  delay(1000);
+  //delay(1000);
 }
 
 bool telnetDiscoverClient(void)
@@ -1126,9 +1124,9 @@ bool telnetDiscoverClient(void)
     tcpClient.println(WiFi.dnsIP(0));
     tcpClient.print(F("IP DNS 2   : "));
     tcpClient.println(WiFi.dnsIP(1));
-    tcpClient.print(F("Port HTTP : "));
-    tcpClient.println(httpPort);
-    tcpClient.println(F("Port FTP : 21"));
+    //tcpClient.print(F("Port HTTP : "));
+    //tcpClient.println(httpPort);
+    //tcpClient.println(F("Port FTP : 21"));
     tcpClient.println();
     tcpClient.println(F("Configuration du mode BOOST : "));
     tcpClient.print(F("Durée du mode BOOST : "));
@@ -1139,7 +1137,7 @@ bool telnetDiscoverClient(void)
     tcpClient.println(F(" %"));
     if (boostTime > 0)
        {
-        tcpClient.print(F(" Tesmp boost restant :"));
+        tcpClient.print(F(" Temps boost restant :"));
         tcpClient.println(boostTime);
        }
     tcpClient.print(F("CE chargé: "));
@@ -1185,8 +1183,11 @@ bool serialProcess(void)
   int stringCounter = 0;
   int index = 0;
 
+String incomingData;
+incomingData.reserve(160);
+
   // Les chaînes valides envoyées par l'arduino se terminent toujours par #
-  String incomingData = Serial.readStringUntil(END_OF_TRANSMIT);
+ incomingData = Serial.readStringUntil(END_OF_TRANSMIT);
 
   // On teste la validité de la chaîne qui doit contenir 'END' à la fin
   if (incomingData.endsWith(F("END")))
@@ -1266,6 +1267,12 @@ bool serialProcess(void)
         ecoPVStats[ECOPV_VERSION] = ecoPVConfig[ECOPV_VERSION];
       }
     }
+    else if (incomingData.startsWith(F("BOOSTTIME")))
+    {
+      incomingData.replace(F("BOOSTTIME,"), "");
+      boostTime = incomingData.toInt();
+    }
+
     return true;
   }
   else
@@ -1285,17 +1292,34 @@ void getAllParamEcoPV(void)
   shouldReadParams = false;
 }
 
-void setParamEcoPV(String param, String value)
+void setParamEcoPV(const String& param, String value) 
 {
-  String command = "";
+String command;
+  command.reserve(32);
+  command = F("SETPARAM,");
   if ((param.toInt() < 10) && (!param.startsWith("0")))
-    param = "0" + param;
-  command = F("SETPARAM,") + param + F(",") + value + F(",END#");
+    command += "0";
+  command += param;
+  command += F(",");
+  command += value;
+  command += F(",END#");
   Serial.print(command);
   shouldReadParams = true; // on demande la lecture des paramètres contenus dans EcoPV
   // pour mettre à jour dans MaxPV
   // ce qui permet de vérifier la prise en compte de la commande
   // C'est par ce seul moyen de MaxPV met à jour sa base interne des paramètres
+}
+
+void setBoostEcoPV(long Time, int Ratio)
+{
+  String command;
+  command.reserve(32);
+  command = F("SETBOOST,");
+  command += Time;
+  command += F(",");
+  command += Ratio;
+  command += F(",END#");
+  Serial.print(command);
 }
 
 void getVersionEcoPV(void)
@@ -1336,7 +1360,10 @@ void relayModeEcoPV(byte opMode)
 {
   char buff[2];
   String str;
-  String command = F("SETRELAY,");
+  String command;
+  str.reserve(16);
+  command.reserve(32);
+ command = F("SETRELAY,");
   if (opMode == STOP)
     command += F("STOP");
   if (opMode == FORCE)
@@ -1358,7 +1385,10 @@ void SSRModeEcoPV(byte opMode)
   char buff[2];
   char tmp[6];
   String str;
-  String command = F("SETSSR,");
+  String command;
+  str.reserve(16);
+  command.reserve(32);
+  command = F("SETSSR,");
   if (opMode == STOP)
     command += F("STOP");
   if (opMode == FORCE)
@@ -1379,7 +1409,9 @@ void SSRModeEcoPV(byte opMode)
 
 void Dimmer_act_EcoPV(byte opMode)
 {
-  String command = F("SETDIM,");
+  String command;
+  command.reserve(32);
+  command = F("SETDIM,");
   if (opMode == OFF)
     command += F("OFF");
   if (opMode == ON)
@@ -1398,8 +1430,10 @@ void SetPVEcoPV(String power){
 
 // envoi température recue par MQTT
 void SetTempEcoPV(String temp){
-    String command = F("SETTEMP,");
-    command += temp;
+  String command;
+  command.reserve(32);
+  command = F("SETTEMP,");
+  command += temp;
   command += F(",END#");
   Serial.print(command);
 }
@@ -1463,28 +1497,30 @@ void watchDogContactEcoPV(void)
 ///////////////////////////////////////////////////////////////////
 void boostON(void)
 {
-  float boostEnergy;         // Energie journalière pour CE attendue en Kw
-  float engy = 0;    
+  float boostEnergy = 0.0;         // Energie journalière pour CE attendue en Kw
+  float engy = 0.0;    
   if ( boostRatio != 0 ) {
     if (boostTimerActive == 2) {
-      boostEnergy = ecoPVConfig[P_RESISTANCE].toFloat()*boostDuration/60000;
-      engy= ecoPVStats[INDEX_ROUTED].toFloat() - ecoPVStats[INDEX_ROUTED_J].toFloat();
-      boostTime = (boostEnergy - engy) / (ecoPVConfig[P_RESISTANCE].toFloat()/1000) * 3600;
-      if (boostTime < 0) boostTime=0;
+      boostEnergy = ecoPVConfig[P_RESISTANCE].toFloat()*float(boostDuration)/60000.0;
+      engy = ecoPVStats[INDEX_ROUTED].toFloat() - ecoPVStats[INDEX_ROUTED_J].toFloat();
+      if (engy <= 0) engy = 0.0;
+      boostTime = long( (boostEnergy - engy) / (ecoPVConfig[P_RESISTANCE].toFloat()/1000.0) * 3600 );
+      if (boostTime <= 0) boostTime = 0;
       }
      else boostTime = ( 60 * boostDuration );   // conversion en secondes
     #if defined(DEBUG_SERIAL)
     tcpClient.print(F("Temps: "));
     tcpClient.println(boostTime);
     #endif
-    burstCnt = 0;
+    setBoostEcoPV(boostTime, boostRatio);
     if (mqttClient.connected ()) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "on");
   }
 }
 
 void boostOFF(void)
 {
-  boostTime = 0;
+  boostTime = -1;
+  setBoostEcoPV(0, boostRatio);
   if (mqttClient.connected ()) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off");
 }
 
@@ -1497,22 +1533,23 @@ void watchDogWifi ( void )
   // On force la déconnexion du service MQTT
   // Si les services sont déjà déconnectés, soit ils n'ont pas été configurés
   // soit les tentatives de reconnexion sont déjà en cours
-
+  bool res;
   if (mqttClient.connected ()) mqttClient.disconnect(true);
-  delay (100);
-  //WiFi.disconnect();
-  //delay(100);
-  //WiFi.reconnect();
-  //WiFi.begin();
-  wifiManager.autoConnect(SSID_CP);
-  delay (100);
+  yield();
+  res = wifiManager.autoConnect(SSID_CP);
+  if (!res) {
+            dimmer_indexWrite();
+            //ECOPV reset ?
+            ESP.restart();  
+            }  
+  yield();
 
   // Demarrage multicast DNS avec nom maxpv
   if (MDNS.begin(M_DNS)) {
     MDNS.addService("http", "tcp", 80);
-    tcpClient.println(F("mDNS démarré ! Accès http://maxpv.local/"));
+    tcpClient.println(F("mDNS ok Accès http://maxpv.local/"));
   }
-  delay(100);
+  yield();
   //webserver
   webServer.begin();
   delay (100);
@@ -1528,7 +1565,7 @@ void timeScheduler(void)
   int day = timeClient.day();
   int hour = timeClient.hours();
   int minute = timeClient.minutes();
-
+  int ofull = ecoPVStats[OUTPUTFULL].toInt();
 
   // Mise à jour des index de début de journée en début de journée à 00H00
   // indicateur de de output (CE) chargé à OFF
@@ -1537,9 +1574,9 @@ void timeScheduler(void)
   }
 
   // Déclenchement du mode BOOST sur Timer
-  // Déclenchemeent si output (CE) non chargé
+  // Déclenchement si output (CE) non chargé
 
-  if ( (ecoPVStats[OUTPUTFULL].toInt() == OFF) && ( boostTimerActive != OFF ) && ( hour == boostTimerHour ) && ( minute == boostTimerMinute ) ) 
+  if ( ( ofull == OFF) && ( boostTimerActive != OFF ) && ( hour == boostTimerHour ) && ( minute == boostTimerMinute ) ) 
     boostON ( );
 }
 
@@ -1556,10 +1593,11 @@ void relais_http (void)
     //ecopv relais on
     if (etatrelais == OFF )
     {
+      String s(a_div2_urlon);
       //appel relais ext on
-      if (appel_http(String(a_div2_urlon)) != -1)
+      if (appel_http(s) != -1)
         etatrelais = ON;
-      delay(100);
+      yield();
     }
   }
   else
@@ -1567,17 +1605,19 @@ void relais_http (void)
     //ecopv relais off
     if (etatrelais == ON )
     {
+      String s (a_div2_urloff);
       //appel relais ext off
-      if (appel_http(String(a_div2_urloff)) != -1)
+      if (appel_http(s) != -1)
         etatrelais = OFF;
-      delay(100);
+      yield();
     }
   }
 }
 
 //appel HTTP
-short appel_http (String url)
+short appel_http (String& url)
 {
+  short httpCode=0;
   WiFiClient client;
   HTTPClient http;
 #if defined (DEBUG_HTTPC)
@@ -1588,7 +1628,7 @@ short appel_http (String url)
   //http.setTimeout(5000);
   if (http.begin(client, url))
   { // HTTP
-    int httpCode = http.GET();
+    httpCode = http.GET();
 #if defined (DEBUG_HTTPC)
     tcpClient.println(httpCode);
 #endif

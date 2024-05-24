@@ -26,11 +26,11 @@ StaticJsonDocument<128> jsonIndex;             // fichier JSON pour stockage ind
 // ////////////////// Fonction appelee tts les sec.                    ///////////////
 // ///////////////////////////////////////////////////////////////////////////////////
 short dimmer_engine() {
-  int cp = 0;
-  short ratio = 1;               // ratio pour simulation asservissement simple
-  int maxpow = dimmer_sumpow;  //ecoPVConfig[P_INSTALLPV].toInt(); // puiss. max à envoyer selon installation
-  int curpower = ecoPVStats[P_ACT].toInt();
-  int prouted = ecoPVStats[P_ROUTED].toInt();
+  int cp        = 0;
+  short ratio   = 1;               // ratio pour simulation asservissement simple
+  int maxpow    = dimmer_sumpow;  //ecoPVConfig[P_INSTALLPV].toInt(); // puiss. max à envoyer selon installation
+  int curpower  = ecoPVStats[P_ACT].toInt();
+  int prouted   = ecoPVStats[P_ROUTED].toInt();
   int maxrouted = ecoPVConfig[P_RESISTANCE].toInt();
 
   //Ping dimmer
@@ -39,7 +39,11 @@ short dimmer_engine() {
 #if defined(DEBUG_DIMMER)
     tcpClient.println(F("Ping Dimmer HTTP"));
 #endif
-    String url = F("http://") + dimmer_ip2 + F(DIMMER_URL_STATE);
+    String url;
+    url.reserve(128);
+    url = F("http://");
+    url += dimmer_ip2; 
+    url += F(DIMMER_URL_STATE);
     if (appel_http(url) != 1)
       dimmer_init();  // tentative reinit dimmer en cas d'erreur
     return -1;
@@ -48,13 +52,17 @@ short dimmer_engine() {
 
   // Routeur sur OFF
   if (dimmer_m == OFF && (dimmer_act == ON)) {
+    #if defined(DEBUG_DIMMER)
     tcpClient.println(F("Dimmer HTTP OFF"));
+    #endif
     call_dimmer(-(dimmer_sumpow + 1));
     return 1;
   }
   // Routeur Mode Force
   if ((dimmer_m == FORCE) && (dimmer_pow < dimmer_sumpow)) {
+    #if defined(DEBUG_DIMMER)
     tcpClient.println(F("Dimmer HTTP FORCE"));
+    #endif
     call_dimmer(dimmer_sumpow);
     return 1;
   }
@@ -63,7 +71,9 @@ short dimmer_engine() {
   if (dimmer_m == AUTOM && (dimmer_indexJ > d_p_limit * 1000 ))
   {
     if (dimmer_act == ON) call_dimmer(-(dimmer_sumpow + 1));
+    #if defined(DEBUG_DIMMER)
     tcpClient.print(F("Dimmer HTTP OFF limit reached"));
+    #endif
     return 1;
   }
   //
@@ -144,7 +154,7 @@ short dimmer_engine() {
 // ////////////////// Initialisation Dimmer HTTP                       ///////////////
 // ///////////////////////////////////////////////////////////////////////////////////
 void dimmer_init0() {
-  tcpClient.println("Dimmer Init");
+  tcpClient.println(F("Dimmer Init"));
   dimmer_act = OFF;
   Dimmer_act_EcoPV(OFF);
   dimmer_pow = 0;
@@ -168,10 +178,17 @@ void dimmer_init() {
       }
     }
   } else dimmer_ip2 = String(dimmer_ip);
-  String url = F("http://") + dimmer_ip2 + F(DIMMER_URLOFF);
+  String url;
+  url.reserve(128);
+  url = HTTP;
+  url += dimmer_ip2;
+  url += F(DIMMER_URLOFF);
   if ((n > 0) && (appel_http(url) == 1)) {
+    dimmer_pow = 0;
     dimmer_count = 0;
     dimmer_try = 0;
+    dimmer_act = OFF;
+    Dimmer_act_EcoPV(OFF);
   } else {
     dimmer_try++;
     if (dimmer_try > DIMMERTRY) dimmer_failsafe();
@@ -198,12 +215,21 @@ void dimmer_failsafe() {
 // ///////////////////////////////////////////////////////////////////////////////////
 void call_dimmer(int dpow) {
   String url;
+  url.reserve(128);
   //Ecopv reçoit le fait que le HTTP Routeur sera ON ; Bloque la puissance du routage du SSR. Avant appel dimmer
-  if ((dimmer_act == OFF) && dimmer_pow > 0) Dimmer_act_EcoPV(ON);
+  if ((dimmer_act == OFF) && (dimmer_pow+dpow > 0)) Dimmer_act_EcoPV(ON);
   if ( dimmer_pow + dpow <= 0 ) //- dpow > dimmer_sumpow)
-    url = HTTP + dimmer_ip2 + F(DIMMER_URLOFF);
-  else
-    url = HTTP + dimmer_ip2 + F(DIMMER_URL) + dpow; // envoi puissance régulation positive ou neg
+    {
+      url = HTTP;
+      url += dimmer_ip2;
+      url += F(DIMMER_URLOFF);
+    }
+  else {
+    url = HTTP;
+    url += dimmer_ip2;
+    url += F(DIMMER_URL);
+    url += dpow; // envoi puissance régulation positive ou neg
+  }
   if (appel_http(url) == 1) {
     dimmer_pow = dimmer_pow + dpow;
     if ( dimmer_pow < 0 ) dimmer_pow = 0;
@@ -218,7 +244,7 @@ void call_dimmer(int dpow) {
     dimmer_count = 0;
     dimmer_try = 0;
   } else dimmer_init();
-  delay(100);  // pour que thread loop passe la main
+  yield();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////

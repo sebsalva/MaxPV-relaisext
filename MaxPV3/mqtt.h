@@ -61,7 +61,7 @@ extern void relayModeEcoPV(byte);
 extern void SSRModeEcoPV(byte );
 extern void boostON(void);
 extern void boostOFF(void);
-extern int boostTime ;
+extern long boostTime ;
 extern bool shouldCheckMQTT ;
 
 ///////////////////////////////////////////////////////////////////

@@ -1,8 +1,8 @@
 #ifndef MAXPV_H
 #define MAXPV_H
 
-//#define DEBUG_DIMMER
-//#define DEBUG_SERIAL
+#define DEBUG_DIMMER
+#define DEBUG_SERIAL
 //#define DEBUG_HTTPC
 #define MAXPV_FTP_SERVER
 
@@ -172,7 +172,7 @@ void rebootESP(void);
 void saveIndexEcoPV(void);
 void saveConfigEcoPV(void);
 void loadConfigEcoPV(void);
-void setParamEcoPV(String, String);
+void setParamEcoPV(const String&, String);
 void SetPVEcoPV(String);
 void SetTempEcoPV(String);
 #endif
